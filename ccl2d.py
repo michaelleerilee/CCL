@@ -1,4 +1,13 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
+"""
+Copyright © 2018 Michael Lee Rilee, mike@rilee.net, Rilee Systems Technologies LLC
+
+For license information see the file LICENSE that should have accompanied this source.
+
+"""
+
+import unittest
 
 import cv2
 import numpy as np
@@ -166,18 +175,42 @@ def ccl2d(data_in,thresh,verbose=False,graph=False):
 
     return markers
 
+class Tests(unittest.TestCase):
+    def test_ccl2(self):
+        d0 = np.zeros((5,6))
+        d0[0,0] = 2
+        d0[0,2] = 2
+        d0[1,2] = 2
+        d0[2,2] = 2
+        d0[0,4] = 2
+        d0[2,4] = 2
+        d0[3,5] = 2
+        d0[4,0] = 2
+        d0[4,3] = 2
+        d0[4,4] = 2
+        d0[4,5] = 2
+        self.assertTrue(\
+                        np.allclose(\
+                                    np.array([[1, 0, 1, 0, 1, 0],
+                                              [0, 0, 1, 0, 0, 0],
+                                              [0, 0, 1, 0, 2, 0],
+                                              [0, 0, 0, 0, 0, 2],
+                                              [2, 0, 0, 2, 2, 2]])\
+                                    ,ccl2d(d0,(1,2))\
+                                    ,rtol=1e-05 ,atol=1e-08))
+        
+    # from Krige import DataField as df
+    # 
+    # if True:
+    #     obj = df.DataField(\
+    #                        datafilename='MYD08_D3.A2015304.061.2018054061429.hdf'\
+    #                        ,datafieldname='Atmospheric_Water_Vapor_Mean'\
+    #                        ,srcdirname='/home/mrilee/data/NOGGIN/MODIS-61-MYD08_D3/'\
+    #     )
+    #     markers = ccl2d(obj.data,(7.25,7.74),graph=True)
+    # 
+    # print 'ccl2d done'
+
 if __name__ == '__main__':
-    print 'ccl2d start'
 
-    from Krige import DataField as df
-
-    if True:
-        obj = df.DataField(\
-                           datafilename='MYD08_D3.A2015304.061.2018054061429.hdf'\
-                           ,datafieldname='Atmospheric_Water_Vapor_Mean'\
-                           ,srcdirname='/home/mrilee/data/NOGGIN/MODIS-61-MYD08_D3/'\
-        )
-        markers = ccl2d(obj.data,(7.25,7.74),graph=True)
-
-    print 'ccl2d done'
-
+    unittest.main()
