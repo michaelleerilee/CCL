@@ -1,6 +1,15 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
+
+Simplest usage:
+
+  labels = ccl_marker_stack().make_labels_from(data_slices,data_threshold_mnmx)
+
+where data_slices is a list of 2D numpy arrays.
+
+--
+
 Copyright © 2018 Michael Lee Rilee, mike@rilee.net, Rilee Systems Technologies LLC
 
 ccl_marker_stack. Label a stack of 2d data slices using ccl2d.
