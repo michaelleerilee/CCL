@@ -12,7 +12,7 @@ Simplest usage:
 
   labels = ccl_marker_stack().make_labels_from(data_slices,data_threshold_mnmx)
 
-where data_slices is a list of 2D numpy arrays.
+where data_slices is a list of 2D numpy arrays and data_threshold_mnmx is a (mn,mx) tuple.
 
 
 
