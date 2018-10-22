@@ -1,5 +1,5 @@
 # CCL
-# -*- coding: utf-8 -*-
+[//]: <>  # -*- coding: utf-8 -*-
 """
 Copyright © 2018 Michael Lee Rilee, mike@rilee.net, Rilee Systems Technologies LLC
 
