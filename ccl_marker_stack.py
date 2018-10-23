@@ -116,6 +116,7 @@ def ccl_relabel2(m0,m1,verbose=False,marker_base=None):
     # marker_max = np.max(m1)
     
     markers_sum = np.zeros(m0.shape,dtype=np.uint8)
+    # tmp = np.zeros(m0.shape,dtype=np.float)
     tmp = np.zeros(m0.shape,dtype=np.float)
 
     # tmp[:,:] = m0+m1
@@ -446,6 +447,15 @@ class ccl_marker_stack(object):
         self.translations.reverse()
         return self.m_results_translated
 
+    def ids_resolved(self):
+        ids = np.array([],dtype=np.int)
+        for i in self.m_results_translated:
+            ids = np.unique(np.concatenate((ids,np.unique(i))))
+        return ids
+
+    def ids_max(self):
+        return np.amax(self.ids_resolved())
+    
     def copy_of_translations(self):
         return self.translations
 
@@ -659,6 +669,47 @@ class Tests(unittest.TestCase):
         for i in range(marker_stack.len()):
             # print 'i,ages(i): ',i,'\n',marker_stack.copy_of_ages_at(i)
             self.assertTrue(np.allclose(expected_ages[i],marker_stack.copy_of_ages_at(i), rtol=1e-05, atol=1e-08))
+
+
+        # Notes for parallelization
+        if False:
+            print 'ms.ids-mx: ',np.amax(marker_stack.ids_resolved())
+            
+            split_id = 4
+            print 'split_id: ',split_id
+            d1 = d[0:split_id]
+            d2 = d[split_id:]
+    
+            ms1 = ccl_marker_stack()
+            labels1 = ms1.make_labels_from(d1,thresh_mnmx)
+            print 'ms1: \n',ms1.copy_of_translations()
+            print 'ms1-mx: ',np.amax(ms1.ids_resolved())
+            print 'ms1-mx: ',ms1.ids_max()
+            print 'ms1: \n',ms1.copy_of_translated_slice_at(-1)
+            
+            ms2 = ccl_marker_stack()
+            labels2 = ms2.make_labels_from(d2,thresh_mnmx)
+            print 'ms2: \n',ms2.copy_of_translations()
+            print 'ms2-mx: ',np.amax(ms2.ids_resolved())
+            print 'ms2: \n',ms2.copy_of_translated_slice_at(0)
+    
+            m1n,m2n,m1eol,trans01 = ccl_relabel2(ms1.copy_of_translated_slice_at(-1)
+                                                 ,ms2.copy_of_translated_slice_at(0)
+                                                 ,marker_base = ms1.ids_max())
+            print 'trans01\n',trans01
+            print 'm1n:    \n',m1n
+            print 'm2n-mx: ',np.amax(m2n)
+            print 'm2n:    \n',m2n
+            print 'ms :    \n',marker_stack.copy_of_translated_slice_at(split_id)
+    
+            # Okay, for a parallel computation.
+            # 1. Split the data stack at a bunch of split_id's.
+            # 2. In parallel, construct marker_stacks for each data stack. 
+            # 3. In serial, copy interface data and run relabel2 to match at interface and rename ids.
+            # 4. Propagate renaming to upper boundary of the 2nd stack, and repeat 3 at the next node.
+            # 5  At the top of the super stack you now know the top id. Repeat steps 3 and 4
+            #    in reverse to propagate the top id info back down to the bottom of the superstack.
+            #    Maybe we do backsub on our way up and down.
 
     def test_relabel2(self):
         if True:

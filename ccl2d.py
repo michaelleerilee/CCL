@@ -4,7 +4,6 @@
 Copyright © 2018 Michael Lee Rilee, mike@rilee.net, Rilee Systems Technologies LLC
 
 For license information see the file LICENSE that should have accompanied this source.
-
 """
 
 import unittest
