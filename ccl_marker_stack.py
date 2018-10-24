@@ -395,6 +395,12 @@ class ccl_marker_stack(object):
         self.translations         = []
         self.marker_base          = 0
 
+    def shift_labels(self,id_delta):
+        for i in range(len(self.m_results)):
+            self.m_results[i][0][np.where(self.m_results[i][0] > 0)] += id_delta
+        for i in range(len(self.m_results_translated)):
+            self.m_results_translated[i][np.where(self.m_results[i] > 0)] += id_delta
+        
     def make_slice_from(self,data,data_threshold_mnmx,graph=False):
         ### There's a bug here. Some blobs are not correctly renamed.
         m1 = ccl2d(data,data_threshold_mnmx,graph=graph)
@@ -417,7 +423,7 @@ class ccl_marker_stack(object):
             self.m_results.append([m1_new[:,:],translation01[:]])
 
         return (m0_new,m1_new,m0_eol,translation01)
-
+    
     def make_labels_from(self,data_slices,data_threshold_mnmx,graph=False):
         for d in data_slices:
             self.make_slice_from(d,data_threshold_mnmx,graph=graph)
@@ -453,6 +459,10 @@ class ccl_marker_stack(object):
             ids = np.unique(np.concatenate((ids,np.unique(i))))
         return ids
 
+    def ids_min_nonzero(self):
+        tmp = self.ids_resolved()
+        return np.amin(tmp[np.where(tmp > 1)])
+        
     def ids_max(self):
         return np.amax(self.ids_resolved())
     
@@ -469,7 +479,7 @@ class ccl_marker_stack(object):
         return self.m_results.copy()
 
     def copy_of_translated_results(self):
-        return self.m_results_translated.copy()
+        return self.m_results_translated
 
     def copy_of_translated_slice_at(self,idx):
         return self.m_results_translated[idx].copy()
@@ -670,6 +680,73 @@ class Tests(unittest.TestCase):
             # print 'i,ages(i): ',i,'\n',marker_stack.copy_of_ages_at(i)
             self.assertTrue(np.allclose(expected_ages[i],marker_stack.copy_of_ages_at(i), rtol=1e-05, atol=1e-08))
 
+    def test_segmented_ccl(self):
+
+        d    = []
+        nseg    = 5
+        nstride = 5
+        nd   = nseg*nstride
+        nshape = (4,5)
+        thresh_mnmx = (1,2)
+        for i in range(nd):
+            d.append( np.random.randint(3,size=nshape,dtype=np.int) )
+            # d.append( np.full(nshape,i,dtype=np.int) )
+        # print 'len(d): ',len(d)
+        ccl_stack = ccl_marker_stack()
+        markers = ccl_stack.make_labels_from(d,thresh_mnmx)
+
+        dseg = []
+        for i in range(nseg):
+            # print 'i,idx: ',i,i*nstride,((i+1)*nstride)-1
+            dseg.append(d[i*nstride:(i+1)*nstride])
+        # print 'len(dseg): ',len(dseg)
+        
+        ccl_stacks = []
+        seg_markers = []
+        for i in range(nseg):
+            ccl_stacks.append(ccl_marker_stack())
+            seg_markers.append(ccl_stacks[i].make_labels_from(dseg[i],thresh_mnmx))
+
+        # for i in range(nseg):
+        #     print dseg[i]
+        #     # print ccl_stacks[i].copy_of_translated_slice_at(-1)
+
+        id_delta = []
+        # for i_interface in range(nseg-1):
+        # if True:
+        #    i_interface = 0
+        for i_interface in range(nseg-1):
+        # for i_interface in [0,1]:
+            stack_seg0 = ccl_stacks[i_interface]
+            delta = stack_seg0.ids_max()
+            id_delta.append(delta)
+            stack_seg1 = ccl_stacks[i_interface+1]
+            stack_seg1.shift_labels(delta)
+            
+            m0n,m1n,m0_eol,trans01 = ccl_relabel2(stack_seg0.copy_of_translated_slice_at(-1)
+                                                 ,stack_seg1.copy_of_translated_slice_at(0)
+                                                 ,marker_base = stack_seg0.ids_max())
+            print 'm0n: \n',m0n
+            print 'm1n: \n',m1n
+            print 'trans01: \n',trans01
+
+        for iseg in range(nseg):
+            print 'iseg, id min,max: ',iseg,ccl_stacks[iseg].ids_min_nonzero(),ccl_stacks[iseg].ids_max()
+
+
+        for iseg in range(nseg):
+            print 'iseg',iseg
+            print ccl_stacks[iseg].copy_of_translated_results()
+# broken            
+            
+        # k = 0
+        # for i in range(nseg):
+        #     print 'i: ',i,'\n'
+        #     for j in dseg[i]:
+        #         print '---'
+        #         print j
+        #         print d[k]
+        #         k += 1
 
         # Notes for parallelization
         if False:
