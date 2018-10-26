@@ -24,7 +24,8 @@ import numpy as np
 from ccl2d import ccl2d
 
 def ccl_backsub(m,translations):
-    if translations is None:
+    "Apply the translations to the markers m."
+    if translations is None or translations == []:
         # print 'ccl_backsub: copy'
         mx = m.copy()
     else:
@@ -395,12 +396,106 @@ class ccl_marker_stack(object):
         self.translations         = []
         self.marker_base          = 0
 
+
+# To merge two stacks, we need to identify the mapping between the two
+# sets of labels at the interface. The labels at the bottom start
+# at '1,' so they will need to be relabeled to avoid collisions.
+# This will engender relabeling all of the second stack.
+#
+# The natural relabeling would be to add the max label of the
+# first stack to the labels of the second stack. This would
+# include both in the marker (label) stacks and the translation
+# stack. Simply adding to every label should work for the second
+# stack. If the second stack has already been "resolved," no
+# further work needs be done for the second stack just from
+# the shift.
+
+# It gets more complicated when we actually interface the first and
+# second stacks. For that, we have to do a relabel2 to determine
+# coincidence, merge, and branch between the two slices. This
+# will drive a relabeling wave up and down away from the interface
+# for a full reconciliation of the labelling schemes of the two
+# stacks. The wave going up does not have to reflect back down
+# since each stack has already been reconciled separately. The
+# new interfacing drives the new constraint.
+
+# Step 1. Get max of first stack/slice. Shift labels in second stack.
+# Step 2. relabel2 the interface slices.
+# Step 3. backsub the translations down through the first stack.
+# Step 4. forward-sub the translations through the second stack.
+# Goal.   A single stack of the form self.m_results
+# i.e.  [...,[slice,translations],[slice,translations],...]
+
+# Note: we're trying to reuse the work previously done to each stack,
+# stitching together the results.
+
     def shift_labels(self,id_delta):
+        # Shift all the labels by id_delta
         for i in range(len(self.m_results)):
             self.m_results[i][0][np.where(self.m_results[i][0] > 0)] += id_delta
-        for i in range(len(self.m_results_translated)):
-            self.m_results_translated[i][np.where(self.m_results[i] > 0)] += id_delta
+
+            # If the translation is empty, should it remain empty?
+            if self.m_results[i][1] != []:
+                # print '---\ni: ',i
+                # print 'shift_labels: ',self.m_results[i],'the marker,translation pair from a set of ids to the current id'
+                # print 'shift_labels: ',self.m_results[i][1], 'the translations component, a list of set(l0),[l1] pairs'
+                # print 'shift_labels: ',self.m_results[i][1][0], 'the 0th translation'
+                # for x in self.m_results[i][1]:
+                #     print 'shift_labels:  ',x, 'a translation'
+                # for x in self.m_results[i][1][0]:
+                #     print 'shift_labels:  ',x,'A piece of a translation'
+                # print 'shift_labels: ',self.m_results[i][1][0][1],'range of the 0th'
+                # print '+--'
+                # print 'domain:  ',[ x    for x in self.m_results[i][1]]
+                # print 'domain:  ',[ x[0] for x in self.m_results[i][1]]
+                # print 'domain:  ',[ r for r in x[0] for x in self.m_results[i][1]]
+                # print 'domain:  ',[ r + id_delta if r > 0 else r for r in x[0] for x in self.m_results[i][1]]
+                # print 'range:   ',[ s + id_delta if s > 0 else s for s in [x[1]] for x in self.m_results[i][1]]
+                # x = []
+                # id_domain = [ r + id_delta if r > 0 else r for r in x[0] for x in self.m_results[i][1] ]
+                id_domain = []
+                for x in self.m_results[i][1]:
+                    for r in x[0]:
+                        if r > 0:
+                            id_domain.append(r + id_delta)
+                        else:
+                            id_domain.append(r)
+                id_range  = [ s + id_delta if s > 0 else s for s in [x[1]] for x in self.m_results[i][1]][0]
+                self.m_results[i][1] = [ id_domain, id_range ]
+                                        
+                
+# prefer this...                        [ s + id_delta if s > 0 else s for s in [x[1]] for x in self.m_results[i][1]] ]
+
+                # print 'result:   \n',self.m_results[i][1]
+                # print 'range:   ',[s + id_delta if s > 0 else s for s in x[1] for x in self.m_results[i][1][0] ]
+                
+        # print '+++'
+        # invalidate the applied translations and ages
+        self.m_results_translated = []
+        self.m_ages = {}
+
+#segmented    def compare_slices_at_interface(stack0,stack1):
+#segmented        # Compare the two slices at the interface.
+#segmented        m0 = stack0.m_results[-1][0]
+#segmented        m1 = stack1.m_results[ 0][0]
+#segmented        m0_new,m1_new,m0_eol,translation01\
+#segmented                = ccl_relabel2(m0,m1,marker_base=0)
+#segmented        
+#segmented        # Just sketching below
+#segmented        stack0.m_results[-1][0] = m0_new
+#segmented        stack0.m_results[-1][1] = [] # Translation01 already applied to m0_new
+#segmented
+#segmented        stack1.m_results[ 0][0] = 
+#segmented        stack1.m_results[ 0][1] = 
         
+    # When a slice is added, it is ccl'd, which has labels starting at 1. 
+    # To avoid collisions, the maximum label of the prvious slice is added to
+    # the labels of the new slice. In relabel2, We identify coincidences
+    # between the labels between the two slices, and handle any merges
+    # or splits. In general, merges eliminate labels, so we rename the
+    # labels so there are no gaps in the labels used in the new slice. A
+    # list of translations between adjacent slices is maintained.
+    #
     def make_slice_from(self,data,data_threshold_mnmx,graph=False):
         ### There's a bug here. Some blobs are not correctly renamed.
         m1 = ccl2d(data,data_threshold_mnmx,graph=graph)
@@ -722,6 +817,8 @@ class Tests(unittest.TestCase):
             id_delta.append(delta)
             stack_seg1 = ccl_stacks[i_interface+1]
             stack_seg1.shift_labels(delta)
+
+            
             
             m0n,m1n,m0_eol,trans01 = ccl_relabel2(stack_seg0.copy_of_translated_slice_at(-1)
                                                  ,stack_seg1.copy_of_translated_slice_at(0)
