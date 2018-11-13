@@ -14,7 +14,7 @@ import numpy as np
 from ccl_marker_stack import ccl_marker_stack
 
 if __name__ == '__main__':
-    print 'ccl_relabel2.py start'
+    print 'ccl_test_on_modis.py'
 
     if True:
         cm        = np.zeros((256,1,3),np.uint8)
@@ -274,4 +274,5 @@ if __name__ == '__main__':
 
 
 
-    print 'ccl_relabel2.py done'
+    print 'done\nccl_test_on_modis.py'
+
