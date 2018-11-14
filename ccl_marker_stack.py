@@ -21,6 +21,7 @@ import unittest
 
 import cv2
 import numpy as np
+import os
 from ccl2d import ccl2d
 
 def ccl_backsub(m,translations):
@@ -428,7 +429,6 @@ class ccl_marker_stack(object):
         self.translations         = []
         self.marker_base          = 0
 
-
 # To merge two stacks, we need to identify the mapping between the two
 # sets of labels at the interface. The labels at the bottom start
 # at '1,' so they will need to be relabeled to avoid collisions.
@@ -825,8 +825,8 @@ class Tests(unittest.TestCase):
             self.assertTrue(np.allclose(expected_ages[i],marker_stack.copy_of_ages_at(i), rtol=1e-05, atol=1e-08))
 
     def test_segmented_ccl(self):
-
-        print '---test segmented ccl---'
+        if False:
+            print '---test segmented ccl---'
         
         d    = []
         nseg    = 5
@@ -1003,31 +1003,48 @@ class Tests(unittest.TestCase):
                 for xt in translations:
                     ccl_stacks[iseg].m_results_translated[im][\
                                                               np.where(ccl_stacks[iseg].m_results_translated[im] == xt[0])]\
-                                                              = xt[1]                        
-        print
-        for iseg in range(nseg):
-            print 'iseg, id min,max: ',iseg,ccl_stacks[iseg].ids_min_nonzero(),ccl_stacks[iseg].ids_max()
+                                                              = xt[1]
 
-        print
-        for iseg in range(nseg-1):
-            print 'iseg, id_delta: ',iseg,id_delta[iseg]
+        if False:
+            print
+            for iseg in range(nseg):
+                print 'iseg, id min,max: ',iseg,ccl_stacks[iseg].ids_min_nonzero(),ccl_stacks[iseg].ids_max()
 
-        print
-        for iseg in range(nseg-1):
-            print 'iseg, if_tran01s: ',iseg,interface_translations01[iseg]
-            print 'iseg, if_tran11s: ',iseg,interface_translations11[iseg]
+            print
+            for iseg in range(nseg-1):
+                print 'iseg, id_delta: ',iseg,id_delta[iseg]
+
+            print
+            for iseg in range(nseg-1):
+                print 'iseg, if_tran01s: ',iseg,interface_translations01[iseg]
+                print 'iseg, if_tran11s: ',iseg,interface_translations11[iseg]
             print
 
-        #print
-        #for iseg in range(nseg-1):
-        #    print 'iseg, if_tran11s: ',iseg,interface_translations11[iseg]
+            #print
+            #for iseg in range(nseg-1):
+            #    print 'iseg, if_tran11s: ',iseg,interface_translations11[iseg]
             
-        print
-        for iseg in range(nseg):
-            print 'iseg',iseg
-            print ccl_stacks[iseg].copy_of_translated_results()
+            print
+            for iseg in range(nseg):
+                print 'iseg',iseg
+                print ccl_stacks[iseg].copy_of_translated_results()
+            print
 
-        print
+        expected_labelling = []
+        for i in range(nd):
+            expected_labelling.append(np.full(nshape,0,dtype=np.int))
+            expected_labelling[i]      [2,2] = 52
+            expected_labelling[i]      [2,4] = 53
+        expected_labelling[-nstride-1] [0,2] = 52
+        expected_labelling[-nstride-1] [1,2] = 52
+        expected_labelling[-nstride]   [0,2] = 52
+        expected_labelling[2*nstride]  [0,0] = 24
+        expected_labelling[2*nstride+1][0,0] = 24
+        
+        for iseg in range(nseg):
+            for islice in range(nstride):
+                self.assertTrue(np.allclose(expected_labelling[iseg*nstride+islice]\
+                                            ,ccl_stacks[iseg].m_results_translated[islice]))
 
         # broken            
             
@@ -1081,8 +1098,6 @@ class Tests(unittest.TestCase):
             #    in reverse to propagate the top id info back down to the bottom of the superstack.
             #    Maybe we do backsub on our way up and down.
 
-
-
     def test_dask_ccl(self):
         from dask.distributed import Client
 
@@ -1107,14 +1122,41 @@ class Tests(unittest.TestCase):
         d[-nstride-1][0,2] = 2
         d[-nstride-1][1,2] = 2
         d[-nstride][0,2] = 2
-
         d[2*nstride]  [0,0] = 2
         d[2*nstride+1][0,0] = 2
 
         dseg = []
         for i in range(nseg):        
             dseg.append(d[i*nstride:(i+1)*nstride])
+            fname=str(i)+'.npy'
+            with open(fname,'wb') as f_handle:
+                np.save(f_handle,dseg[i])
+
+        ##################################################
+            
+        expected_labelling = []
+        for i in range(nd):
+            expected_labelling.append(np.full(nshape,0,dtype=np.int))
+            expected_labelling[i]      [2,2] = 52
+            expected_labelling[i]      [2,4] = 53
+        expected_labelling[-nstride-1] [0,2] = 52
+        expected_labelling[-nstride-1] [1,2] = 52
+        expected_labelling[-nstride]   [0,2] = 52
+        expected_labelling[2*nstride]  [0,0] = 24
+        expected_labelling[2*nstride+1][0,0] = 24
         
+        ##################################################
+        def load_a_stack(fname):
+            f_handle = open(fname,'rb')
+            seg = np.load(f_handle)
+            f_handle.close()
+            return seg
+
+        data_segs = []
+        for i in range(nseg):
+            fname=str(i)+'.npy'            
+            data_segs.append(client.submit(load_a_stack,fname))
+            
         ##################################################
         # Construct stacks of futures
         #
@@ -1125,14 +1167,13 @@ class Tests(unittest.TestCase):
 
         ccl_stacks = []
         for i in range(nseg):
-            ccl_stacks.append(client.submit(make_a_stack,dseg[i],thresh_mnmx))
+            ccl_stacks.append(client.submit(make_a_stack,data_segs[i],thresh_mnmx))
+            # ccl_stacks.append(client.submit(make_a_stack,dseg[i],thresh_mnmx))
 
         ##################################################
         # Make translations
         #
-        def shift_labels(stackF0,stackF1):
-            stack_seg0=stackF0
-            stack_seg1=stackF1
+        def shift_labels(stack_seg0,stack_seg1):
             delta = stack_seg0.ids_max()            
             stack_seg1.shift_labels(delta)
             return stack_seg1
@@ -1144,14 +1185,7 @@ class Tests(unittest.TestCase):
 
         # print 'sl-000 len(ccl_stacks_z) = ',len(ccl_stacks_z)
         
-        def make_translations(i_if,stackF0,stackF1):
-            # print '000 make_trans i_if = ',i_if
-            # stack_seg0=stackF0.result()
-            # stack_seg1=stackF1.result()
-            stack_seg0=stackF0
-            stack_seg1=stackF1
-            # delta = stack_seg0.ids_max()            
-            # stack_seg1.shift_labels(delta)
+        def make_translations(i_if,stack_seg0,stack_seg1):
             m0 = stack_seg0.copy_of_translated_slice_at(-1)
             m1 = stack_seg1.copy_of_translated_slice_at(0)
             
@@ -1172,10 +1206,7 @@ class Tests(unittest.TestCase):
         ##################################################
         # Global translation
 
-
-        def apply_interface_translation0(xab,ccl_stack_f):
-            # ccl_stack = ccl_stack_f.result()
-            ccl_stack = ccl_stack_f
+        def apply_interface_translation0(xab,ccl_stack):
             for x in xab:
                 x_domain = x[0]
                 if len(x_domain) > 1:
@@ -1185,9 +1216,7 @@ class Tests(unittest.TestCase):
                             ccl_stack.m_results_translated[im][np.where(ccl_stack.m_results_translated[im] == i)] = x_single
             return ccl_stack
 
-        def apply_translations(translations,ccl_stack_f):
-            # ccl_stack = ccl_stack_f.result()
-            ccl_stack = ccl_stack_f
+        def apply_translations(translations,ccl_stack):
             for im in range(len(ccl_stack.m_results_translated)):
                 for xt in translations:
                     ccl_stack.m_results_translated[im][np.where(ccl_stack.m_results_translated[im] == xt[0])] \
@@ -1260,13 +1289,24 @@ class Tests(unittest.TestCase):
             ccl_stack_f = ccl_stacks_a[i_if]
             ccl_stacks_b.append(client.submit(apply_translations,translations,ccl_stack_f))
         ccl_stacks_b.append(ccl_stacks_a[-1])
+        
+        if False:
+            print 'ccl_stacks_b, len = ',len(ccl_stacks_b)
+        if False:
+            for i_st in range(len(ccl_stacks_b)):
+                print 'i_st: ',i_st
+                print ccl_stacks_b[i_st].result().m_results_translated
+                print '--'
+        
+        for iseg in range(nseg):
+            for islice in range(nstride):
+                self.assertTrue(np.allclose(expected_labelling[iseg*nstride+islice]\
+                                            ,ccl_stacks_b[iseg].result().m_results_translated[islice]))
 
-        print 'ccl_stacks_b, len = ',len(ccl_stacks_b)
-        for i_st in range(len(ccl_stacks_b)):
-            print 'i_st: ',i_st
-            print ccl_stacks_b[i_st].result().m_results_translated
-            print '--'
-                
+        for i in range(nseg):
+            fname=str(i)+'.npy'
+            os.remove(fname)
+            
         client.close()
             
     def test_relabel2(self):
@@ -1373,4 +1413,3 @@ if __name__ == '__main__':
 
     if True:
         unittest.main()
-
