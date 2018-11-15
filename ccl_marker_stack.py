@@ -20,6 +20,7 @@ For license information see the file LICENSE that should have accompanied this s
 import unittest
 
 import cv2
+from dask.distributed import Client
 import numpy as np
 import os
 from ccl2d import ccl2d
@@ -652,7 +653,163 @@ class ccl_marker_stack(object):
         else:
             return ()
 
+def load_a_stack(fname):
+    f_handle = open(fname,'rb')
+    seg = np.load(f_handle)
+    f_handle.close()
+    return seg
 
+def make_a_stack(d,thresh_mnmx):
+    ccl_stack = ccl_marker_stack()
+    ccl_stack.make_labels_from(d,thresh_mnmx)
+    return ccl_stack
+
+def shift_labels(stack_seg0,stack_seg1):
+    delta = stack_seg0.ids_max()            
+    stack_seg1.shift_labels(delta)
+    return stack_seg1
+
+def make_translations(i_if,stack_seg0,stack_seg1):
+    m0 = stack_seg0.copy_of_translated_slice_at(-1)
+    m1 = stack_seg1.copy_of_translated_slice_at(0)
+    
+    m0n,m1n,m0_eol,trans01,trans11 = ccl_relabel2(m0
+                                                  ,m1
+                                                  ,marker_base = stack_seg0.ids_max())
+    return (trans01,trans11)
+
+def apply_interface_translation0(xab,ccl_stack):
+    for x in xab:
+        x_domain = x[0]
+        if len(x_domain) > 1:
+            x_single = max(x_domain)
+            for i in x_domain:
+                for im in range(len(ccl_stack.m_results_translated)):
+                    ccl_stack.m_results_translated[im][np.where(ccl_stack.m_results_translated[im] == i)] = x_single
+    return ccl_stack
+
+def apply_translations(translations,ccl_stack):
+    for im in range(len(ccl_stack.m_results_translated)):
+        for xt in translations:
+            ccl_stack.m_results_translated[im][np.where(ccl_stack.m_results_translated[im] == xt[0])] \
+                = xt[1]
+    return ccl_stack
+
+class ccl_dask(object):
+    def __init__(self):
+        self.client = Client()
+        self.ccl_stacks           = []
+        self.ccl_stacks_relabeled = []
+        self.data_segs  = []
+        self.nseg       = 0
+
+    def load_data_segments(self,file_list):
+        self.nseg = len(file_list)
+        for fn in file_list:
+            self.data_segs.append(self.client.submit(load_a_stack,fn))
+
+    def make_stacks(self,thresh_mnmx):
+        self.thresh_mnmx = thresh_mnmx
+        for i in range(self.nseg):
+            self.ccl_stacks.append(self.client.submit(make_a_stack\
+                                                 ,self.data_segs[i]\
+                                                 ,self.thresh_mnmx))
+    def shift_labels(self):
+        self.ccl_stacks_relabeled = [self.ccl_stacks[0]]
+        for i_interface in range(self.nseg-1):
+            self.ccl_stacks_relabeled\
+                .append(self.client.submit(shift_labels\
+                                      ,self.ccl_stacks_relabeled[i_interface]\
+                                      ,self.ccl_stacks[i_interface+1]))
+
+    def make_translations(self):
+        self.interface_translationsXX = []
+        for i_interface in range(self.nseg-1):
+            self.interface_translationsXX.append(self.client.submit(make_translations\
+                                                               ,i_interface\
+                                                               ,self.ccl_stacks_relabeled[i_interface]\
+                                                               ,self.ccl_stacks_relabeled[i_interface+1]))
+            
+    def apply_translations(self):
+        ccl_stacks_a             = []
+        self.global_translations = []
+        # ccl_stack_last = ccl_stacks_z[-1] # a future
+        ccl_stack_last = self.ccl_stacks_relabeled[-1] # a future
+        
+        for i_interface in range(self.nseg-2,-1,-1):
+            new_interface_translations = []
+            ccl_stack1 = ccl_stack_last # a future
+            ccl_stack0 = self.ccl_stacks_relabeled[i_interface] # a future
+            XX = self.interface_translationsXX[i_interface] # a future
+            xx = XX.result() # is (x01,x11)
+            # Save the top for futuring global relabeling
+            ccl_stacks_a.append(self.client.submit(apply_interface_translation0,xx[1],ccl_stack1))
+            # The bottom is the top in the next iteration
+            ccl_stack_last = self.client.submit(apply_interface_translation0,xx[0],ccl_stack0)
+
+            # Propagate labels. Note this is essentially serial as currently written.
+            x11 = xx[1]
+            x01 = xx[0]
+            for x1 in x11:
+                x1_domain = max(x1[0])
+                x1_fict   = x1[1]
+
+                i0 = 0
+                done = not( i0 < len(x01) )
+                while not done:
+                    x0 = x01[i0]
+                    x0_domain = max(x0[0])
+                    x0_fict = x0[1]
+                    if x0_fict == x1_fict:
+                        if len(self.global_translations) > 0:
+                            for old_x in self.global_translations[-1]:
+                                if old_x[0] == x1_domain:
+                                    x1_domain = old_x[1]
+                                    break
+                        new_x = [x0_domain,x1_domain]
+                        new_interface_translations.append(list(new_x))
+                        done = True
+                    else:
+                        i0 = i0 + 1
+                        done = i0 > len(x01)-1
+            # if len(new_interface_translations) > 0:
+            self.global_translations.append(list(new_interface_translations))
+            # print '080 global_translations: ',global_translations
+
+        # print '099 len ccl_stacks_a = ',len(ccl_stacks_a)
+        # print '100 global_translations: ',global_translations
+        
+        self.global_translations.reverse()
+        ccl_stacks_a.append(ccl_stack_last)
+        ccl_stacks_a.reverse()
+        
+        # print '110 len(ccl_stacks_a) =       ',len(ccl_stacks_a)
+        # print '110 global_translations:      ',global_translations
+        # print '110 len(global_translations): ',len(global_translations)
+
+        # Apply the translations globally
+        self.ccl_stacks_b = []
+        for i_if in range(self.nseg-1):
+            iseg = i_if
+            translations = self.global_translations[i_if]
+            self.ccl_stacks_b.append(self.client.submit(apply_translations,translations,ccl_stacks_a[i_if]))
+        self.ccl_stacks_b.append(ccl_stacks_a[-1])
+
+        self.ccl_results = []
+        for i_st in range(len(self.ccl_stacks_b)):
+            self.ccl_results.append(self.ccl_stacks_b[i_st].result())
+        
+        # for i_st in range(len(self.ccl_stacks_b)):
+        #     print 'i_st: ',i_st
+        #     print self.ccl_stacks_b[i_st].result().m_results_translated
+        #     print '--'
+            
+        # # Gather results here -- order of arrival? Maybe save order information and sort after gather is done...
+        # # E.g. add [iseg,future] to ccl_stacks_b instead of just the future.
+        # self.ccl_results = self.client.gather(self.ccl_stacks_b)
+            
+        self.client.close()
+            
 class Tests(unittest.TestCase):
 
     def test_diagonals(self):
@@ -1098,8 +1255,75 @@ class Tests(unittest.TestCase):
             #    in reverse to propagate the top id info back down to the bottom of the superstack.
             #    Maybe we do backsub on our way up and down.
 
+
+    def test_ccl_dask_object(self):
+        ##################################################
+        # Construct the test data
+        #
+        d    = []
+        nseg    = 5
+        nstride = 5
+        nd   = nseg*nstride
+        nshape = (4,5)
+        thresh_mnmx = (1,2)
+        for i in range(nd):
+            # d.append( np.random.randint(3,size=nshape,dtype=np.int) )
+            d.append( np.full(nshape,0,dtype=np.int) )
+            d[-1][2,2] = 2
+            d[-1][2,4] = 2
+            # d.append( np.full(nshape,i,dtype=np.int) )
+        # print 'len(d): ',len(d)
+        d[-nstride-1][0,2] = 2
+        d[-nstride-1][1,2] = 2
+        d[-nstride][0,2] = 2
+        d[2*nstride]  [0,0] = 2
+        d[2*nstride+1][0,0] = 2
+
+        dseg = []
+        file_list = []
+        for i in range(nseg):        
+            dseg.append(d[i*nstride:(i+1)*nstride])
+            fname=str(i)+'.npy'
+            file_list.append(fname)
+            with open(fname,'wb') as f_handle:
+                np.save(f_handle,dseg[i])
+
+        ##################################################
+        # Set up expectations
+        expected_labelling = []
+        for i in range(nd):
+            expected_labelling.append(np.full(nshape,0,dtype=np.int))
+            expected_labelling[i]      [2,2] = 52
+            expected_labelling[i]      [2,4] = 53
+        expected_labelling[-nstride-1] [0,2] = 52
+        expected_labelling[-nstride-1] [1,2] = 52
+        expected_labelling[-nstride]   [0,2] = 52
+        expected_labelling[2*nstride]  [0,0] = 24
+        expected_labelling[2*nstride+1][0,0] = 24
+
+        ##################################################
+        # The calculation
+        ccl_dask_object = ccl_dask()
+        ccl_dask_object.load_data_segments(file_list)
+        ccl_dask_object.make_stacks(thresh_mnmx)
+        ccl_dask_object.shift_labels()
+        ccl_dask_object.make_translations()
+        ccl_dask_object.apply_translations()
+        
+        ##################################################
+        # Check results
+        for iseg in range(nseg):
+            for islice in range(nstride):
+                self.assertTrue(np.allclose(expected_labelling[iseg*nstride+islice]\
+                                            ,ccl_dask_object.ccl_results[iseg].m_results_translated[islice]))
+        
+        ##################################################
+        # Clean up
+        for i in range(nseg):
+            fname=str(i)+'.npy'
+            os.remove(fname)
+        
     def test_dask_ccl(self):
-        from dask.distributed import Client
 
         client = Client()
 
