@@ -697,7 +697,8 @@ def apply_translations(translations,ccl_stack):
 
 class ccl_dask(object):
     def __init__(self):
-        self.client = Client()
+        # self.client = Client()
+        self.client = Client('localhost:8786')
         self.ccl_stacks           = []
         self.ccl_stacks_relabeled = []
         self.data_segs  = []
@@ -1283,7 +1284,7 @@ class Tests(unittest.TestCase):
         file_list = []
         for i in range(nseg):        
             dseg.append(d[i*nstride:(i+1)*nstride])
-            fname=str(i)+'.npy'
+            fname='/home/mrilee/'+str(i)+'.npy'
             file_list.append(fname)
             with open(fname,'wb') as f_handle:
                 np.save(f_handle,dseg[i])
@@ -1320,12 +1321,13 @@ class Tests(unittest.TestCase):
         ##################################################
         # Clean up
         for i in range(nseg):
-            fname=str(i)+'.npy'
+            fname='/home/mrilee/'+str(i)+'.npy'
             os.remove(fname)
         
     def test_dask_ccl(self):
 
-        client = Client()
+        # client = Client()
+        client = Client('localhost:8786')
 
         ##################################################
         # Construct the test data
@@ -1352,7 +1354,7 @@ class Tests(unittest.TestCase):
         dseg = []
         for i in range(nseg):        
             dseg.append(d[i*nstride:(i+1)*nstride])
-            fname=str(i)+'.npy'
+            fname='/home/mrilee/'+str(i)+'.npy'
             with open(fname,'wb') as f_handle:
                 np.save(f_handle,dseg[i])
 
@@ -1378,7 +1380,7 @@ class Tests(unittest.TestCase):
 
         data_segs = []
         for i in range(nseg):
-            fname=str(i)+'.npy'            
+            fname='/home/mrilee/'+str(i)+'.npy'            
             data_segs.append(client.submit(load_a_stack,fname))
             
         ##################################################
@@ -1528,7 +1530,7 @@ class Tests(unittest.TestCase):
                                             ,ccl_stacks_b[iseg].result().m_results_translated[islice]))
 
         for i in range(nseg):
-            fname=str(i)+'.npy'
+            fname='/home/mrilee/'+str(i)+'.npy'
             os.remove(fname)
             
         client.close()
