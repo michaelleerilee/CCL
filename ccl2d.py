@@ -11,20 +11,43 @@ import unittest
 import cv2
 import numpy as np
 
-def ccl2d(data_in,thresh,verbose=False,graph=False):
+def ccl2d(data_in,thresh_in,verbose=False,graph=False):
 
     nlat = data_in.shape[0]
     nlon = data_in.shape[1]
     
     data = np.zeros(data_in.shape,dtype=np.uint8)
-    mx = np.nanmax(data_in)
+    # TODO Can we switch to a log encoding?
+    # TODO Assuming data is non-negative in the following?
+    # mx = np.nanmax(data_in)
+    # mx = np.amax(data_in[np.where(np.isfinite(data_in))])
+    mx = thresh_in[1]
     if mx == 0:
         mx = 1;
+    d_lo = int(255*(thresh_in[0]/mx))
+    d_hi = int(255*(thresh_in[1]/mx))
+    # MLR I misunderstood how cv2.threshold treats d_hi -> max
+    # I thought they were high and low thresholds
+    # Turns out, d_lo is the threshold, while d_hi is the replacement value.
+    # TODO Fix Kluge
+    # The following will have all sorts of integer wraparound...
     data[:,:] = 255*(data_in[:,:]/mx)
-    d_lo = int(255*(thresh[0]/mx))
-    d_hi = int(255*(thresh[1]/mx))
+    # TODO The following is terrible and this entire routine should be fixed.
+    # TODO To do that, I need a better understanding of cv2.threshold
+    # bad -- data[np.where(data_in > thresh[1])] = d_lo-1
+    # Does the following just do what the threshold does below?
+    # data[np.where(data_in > thresh[1])] = d_hi
+    # TODO Just do the following?
+    data[np.where(data_in > thresh_in[0])] = d_hi
+    ret = 0.0
+    # thresh = data
 
-    if verbose:
+    thresh = np.zeros(data_in.shape,dtype=np.uint8)
+    thresh[np.where(data_in > thresh_in[0])] = 255
+    
+#    if verbose:
+    if True:
+        print('mx:        ',mx)
         print('data-mnmx: ',np.nanmin(data_in),np.nanmax(data_in))
         print('type:  ',type(data))
         print('dtype: ',data.dtype)
@@ -34,10 +57,11 @@ def ccl2d(data_in,thresh,verbose=False,graph=False):
     if False:
         cv2.imshow('data_in',data_in); cv2.waitKey(0); cv2.destroyAllWindows()
 
-    ret, thresh = cv2.threshold(data, d_lo, d_hi, cv2.THRESH_BINARY)
+##---    ret, thresh = cv2.threshold(data, d_lo, d_hi, cv2.THRESH_BINARY)
 #   ret, thresh = cv2.threshold(data, 7, 7.74, cv2.THRESH_BINARY_INV)
 
-    if verbose:
+#    if verbose:
+    if True:
         print ('thresh-ret: ',ret)
         print('type(thresh): ',type(thresh))
         print('type(thresh[0,0]): ',type(thresh[0,0]))

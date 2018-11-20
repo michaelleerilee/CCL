@@ -696,18 +696,27 @@ def apply_translations(translations,ccl_stack):
     return ccl_stack
 
 class ccl_dask(object):
-    def __init__(self):
+    def __init__(self,client=None): 
         # self.client = Client()
-        self.client = Client('localhost:8786')
+        if client is None:
+            self.client = Client('localhost:8786')
+        else:
+            self.client = client            
         self.ccl_stacks           = []
         self.ccl_stacks_relabeled = []
         self.data_segs  = []
         self.nseg       = 0
 
-    def load_data_segments(self,file_list):
+    def load_data_segments_from_numpy_filelist(self,file_list):
         self.nseg = len(file_list)
         for fn in file_list:
             self.data_segs.append(self.client.submit(load_a_stack,fn))
+
+    def load_data_segments(self,segments):
+        self.nseg = len(segments)
+        # TODO: Not tested?
+        for i in range(self.nseg):
+            self.data_segs.append(segments[i])
 
     def make_stacks(self,thresh_mnmx):
         self.thresh_mnmx = thresh_mnmx
@@ -1022,8 +1031,6 @@ class Tests(unittest.TestCase):
             seg_markers.append(ccl_stacks[i].make_labels_from(dseg[i],thresh_mnmx))
 
 
-
-
         # for i in range(nseg):
         #     print dseg[i]
         #     # print ccl_stacks[i].copy_of_translated_slice_at(-1)
@@ -1305,7 +1312,7 @@ class Tests(unittest.TestCase):
         ##################################################
         # The calculation
         ccl_dask_object = ccl_dask()
-        ccl_dask_object.load_data_segments(file_list)
+        ccl_dask_object.load_data_segments_from_numpy_filelist(file_list)
         ccl_dask_object.make_stacks(thresh_mnmx)
         ccl_dask_object.shift_labels()
         ccl_dask_object.make_translations()
@@ -1636,6 +1643,6 @@ class Tests(unittest.TestCase):
                                         ,m0_orig_x))
             
 if __name__ == '__main__':
-
+    print 'ccl_marker_stack.py main testing...'
     if True:
         unittest.main()
