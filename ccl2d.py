@@ -45,8 +45,8 @@ def ccl2d(data_in,thresh_in,verbose=False,graph=False):
     thresh = np.zeros(data_in.shape,dtype=np.uint8)
     thresh[np.where(data_in > thresh_in[0])] = 255
     
-#    if verbose:
-    if True:
+    if verbose:
+#    if True:
         print('mx:        ',mx)
         print('data-mnmx: ',np.nanmin(data_in),np.nanmax(data_in))
         print('type:  ',type(data))
@@ -60,8 +60,8 @@ def ccl2d(data_in,thresh_in,verbose=False,graph=False):
 ##---    ret, thresh = cv2.threshold(data, d_lo, d_hi, cv2.THRESH_BINARY)
 #   ret, thresh = cv2.threshold(data, 7, 7.74, cv2.THRESH_BINARY_INV)
 
-#    if verbose:
-    if True:
+    if verbose:
+#    if True:
         print ('thresh-ret: ',ret)
         print('type(thresh): ',type(thresh))
         print('type(thresh[0,0]): ',type(thresh[0,0]))

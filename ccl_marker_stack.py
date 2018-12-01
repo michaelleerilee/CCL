@@ -424,11 +424,18 @@ def ccl_relabel2(m0,m1,verbose=False,marker_base=None):
 
 class ccl_marker_stack(object):
     def __init__(self):
+        # m_results is a list of labeled-data-translation pairs. i.e. [[m1_new,translation],...]
         self.m_results            = []
+        # m_results_translated is a list of the labeled data, i.e. [m1_new,...]
         self.m_results_translated = []
         self.m_ages               = {}
         self.translations         = []
         self.marker_base          = 0
+
+        # self.m_results_simpleTrans[old_label] = new_label
+        self.m_results_simpleTrans = {}
+        # self.m_results_simple[islice] = slice[:,:]
+        self.m_results_simple      = []
 
 # To merge two stacks, we need to identify the mapping between the two
 # sets of labels at the interface. The labels at the bottom start
@@ -659,9 +666,69 @@ def load_a_stack(fname):
     f_handle.close()
     return seg
 
+def make_blizz_mask(ghost_bottom,d,ghost_top,thresh_mnmx):
+    if ghost_bottom is None:
+        bottom  = []
+        nbottom = 0
+    else:
+        nbottom = len(ghost_bottom)
+        if nbottom == 1:
+            bottom = ghost_bottom
+        else:
+            bottom = ghost_bottom[nbottom-2:nbottom]
+    ndata   = len(d)
+    if ghost_top is None:
+        top  = []
+        ntop = 0
+    else:
+        ntop = len(ghost_top)
+        if ntop == 1:
+            top = ghost_top
+        else:
+            top = ghost_top[ntop-2:ntop]
+
+    temp_seg  = bottom+d+top
+    ntemp_seg = len(temp_seg)
+
+    blizz_mask = []
+    nshape = d[0].shape
+    for islice in range(nbottom,nbottom+ndata):
+        mask  = np.full(nshape,False,dtype=np.bool)
+        count = np.full(nshape,0,dtype=np.int)
+
+        for j in range(-2,3):
+            jcompare = j+islice
+            if 0 <= jcompare and jcompare < ntemp_seg:
+                count[np.where(temp_seg[jcompare] > thresh_mnmx[0])] += 1
+
+        mask[np.where(count >= 3)] = True
+        blizz_mask.append(mask)
+    
+    return blizz_mask
+
 def make_a_stack(d,thresh_mnmx):
     ccl_stack = ccl_marker_stack()
     ccl_stack.make_labels_from(d,thresh_mnmx)
+    # For comparing with the tests in load_for_ccl_inputs.py
+    # print 'warning: d truncated'
+    # print 'warning: d truncated'
+    # print 'warning: d truncated'
+    # ccl_stack.make_labels_from(d[0:4],thresh_mnmx)
+    return ccl_stack
+
+def make_a_blizz_stack(d,thresh_mnmx,blizz_mask,fill_value=0):
+    ccl_stack = ccl_marker_stack()
+    if blizz_mask is None:
+        ccl_stack.make_labels_from(d,thresh_mnmx)
+    else:
+        nd     = len(d)
+        nshape = d[0].shape
+        d_masked = []
+        for i in range(nd):
+            dm = np.full(nshape,fill_value,np.float)
+            dm[np.where(blizz_mask[i])] = d[i][np.where(blizz_mask[i])]
+            d_masked.append(dm)
+        ccl_stack.make_labels_from(d_masked,thresh_mnmx)
     return ccl_stack
 
 def shift_labels(stack_seg0,stack_seg1):
@@ -695,6 +762,45 @@ def apply_translations(translations,ccl_stack):
                 = xt[1]
     return ccl_stack
 
+def simplify_get_orig_labels(ccl_stack):
+    print 'simplify_get'
+    all_labels = set()
+    for im in range(len(ccl_stack.m_results_translated)):
+        for l in np.unique(ccl_stack.m_results_translated[im]):
+        # for l in range(len(ccl_stack.m_results_translated[im])):
+            all_labels.add(l)
+    return all_labels
+
+def simplify_stack(ccl_stack,simplified_labels,i_st):
+    print i_st,'simplify_stack sl_keys = ',len(simplified_labels.keys())
+    ccl_stack.m_results_simpleTrans = simplified_labels
+    ccl_stack.m_results_simple      = []
+    print i_st,'simplify_stack len ccl_stack m_results_translated = ',len(ccl_stack.m_results_translated),type(ccl_stack.m_results_translated)
+    for im in range(len(ccl_stack.m_results_translated)):
+        print i_st,'simplify_stack im,len m_r_trans = '\
+            ,im,len(ccl_stack.m_results_translated[im])\
+            ,type(ccl_stack.m_results_translated[im])\
+            ,ccl_stack.m_results_translated[im].shape
+        ccl_stack.m_results_simple.append(np.copy(ccl_stack.m_results_translated[im])) # append the im-th element
+        print i_st,'type ccl_stack.m_results_simple      ',type(ccl_stack.m_results_simple)
+        print i_st,'type ccl_stack.m_results_simple[im]  ',type(ccl_stack.m_results_simple[im])
+        print i_st,'ccl_stack.m_results_simple[im].shape ',ccl_stack.m_results_simple[im].shape
+        # Make the substitutions
+        count = 0
+        for k in simplified_labels.keys():
+            idx = np.where(ccl_stack.m_results_translated[im] == k)
+            if count % 50 == 0:
+                print 'k,len(idx): ',k,len(idx)
+                if len(idx) > 0:
+                    print 'k,sl[k] ',k,simplified_labels[k]
+                    print 'idx: ',idx
+            #    print i_st,'simplify_stack count = ',count
+            count += 1
+            ccl_stack.m_results_simple[im][idx] = simplified_labels[k]
+            # ccl_stack.m_results_simple[im][np.where(ccl_stack.m_results_translated[im] == k)] = simplified_labels[k]
+    print i_st,'simplify_stack done'
+    return ccl_stack
+
 class ccl_dask(object):
     def __init__(self,client=None): 
         # self.client = Client()
@@ -706,24 +812,68 @@ class ccl_dask(object):
         self.ccl_stacks_relabeled = []
         self.data_segs  = []
         self.nseg       = 0
+        # data_segs_blizz_3hour
+        self.segs_blizz_mask = []
+        # The resulting ccl_marker_stacks
+        self.ccl_results = []
+        # Relabel with global, simplified labels
+        self.ccl_results_simplified_labels = []
 
     def load_data_segments_from_numpy_filelist(self,file_list):
         self.nseg = len(file_list)
         for fn in file_list:
             self.data_segs.append(self.client.submit(load_a_stack,fn))
 
+    def load_data_segments_with_loader(self,loader,file_list,argList):
+        # print 'argList: ',argList
+        self.nseg = len(file_list)
+        for fn in file_list:
+            # print 'loading: ',fn
+            self.data_segs.append(self.client.submit(loader,fn,argList))
+            # self.data_segs.append(loader(fn,argList))
+            
     def load_data_segments(self,segments):
         self.nseg = len(segments)
         # TODO: Not tested?
         for i in range(self.nseg):
             self.data_segs.append(segments[i])
 
+    # def make_stacks(self,thresh_mnmx):
+    def make_blizzard_stacks(self,thresh_mnmx):
+        "Use the 3-hour blizzard criterion to make the blizzard mask and then construct the ccl_stack for tracking."
+        self.thresh_mnmx = thresh_mnmx
+        # Blizzard 3-hours
+        for i in range(self.nseg):
+            if i == 0:
+                ghost_bottom = None
+            else:
+                ghost_bottom = self.data_segs[i-1]
+            if i == self.nseg-1:
+                ghost_top = None
+            else:
+                ghost_top = self.data_segs[i+1]
+                
+            self.segs_blizz_mask.append(self.client.submit(make_blizz_mask\
+                                                      ,ghost_bottom\
+                                                      ,self.data_segs[i]\
+                                                      ,ghost_top\
+                                                      ,self.thresh_mnmx))
+        # Track
+        for i in range(self.nseg):
+            self.ccl_stacks.append(self.client.submit(make_a_blizz_stack\
+                                                      ,self.data_segs[i]\
+                                                      ,self.thresh_mnmx\
+                                                      ,self.segs_blizz_mask[i]))
+
+    # def make_stacks(self,thresh_mnmx):
     def make_stacks(self,thresh_mnmx):
         self.thresh_mnmx = thresh_mnmx
+        # Track
         for i in range(self.nseg):
             self.ccl_stacks.append(self.client.submit(make_a_stack\
-                                                 ,self.data_segs[i]\
-                                                 ,self.thresh_mnmx))
+                                                      ,self.data_segs[i]\
+                                                      ,self.thresh_mnmx))
+            
     def shift_labels(self):
         self.ccl_stacks_relabeled = [self.ccl_stacks[0]]
         for i_interface in range(self.nseg-1):
@@ -805,6 +955,10 @@ class ccl_dask(object):
             self.ccl_stacks_b.append(self.client.submit(apply_translations,translations,ccl_stacks_a[i_if]))
         self.ccl_stacks_b.append(ccl_stacks_a[-1])
 
+    def collect_all_results(self):
+
+        # Note the following is not in parallel!
+        # ccl_stacks_b is a list of futures.
         self.ccl_results = []
         for i_st in range(len(self.ccl_stacks_b)):
             self.ccl_results.append(self.ccl_stacks_b[i_st].result())
@@ -817,7 +971,73 @@ class ccl_dask(object):
         # # Gather results here -- order of arrival? Maybe save order information and sort after gather is done...
         # # E.g. add [iseg,future] to ccl_stacks_b instead of just the future.
         # self.ccl_results = self.client.gather(self.ccl_stacks_b)
+
+    def collect_all_result_at_segment(self,iseg):
+        # ccl_stacks_b is a list of futures.
+        i_st = iseg
+        return self.ccl_stacks_b[i_st].result()
+        
+    def simplify_labels(self):
+        # Futures for all labels
+        ccl_stacks_simplified_a = []
+        for i in range(len(self.ccl_stacks_b)):
+            ccl_stacks_simplified_a.append(self.client.submit(simplify_get_orig_labels,self.ccl_stacks_b[i]))
+
+        # collect from across the cluster, sort
+        # Here, sholuldn't i_st be iseg?
+        all_labels = set([])
+        for i_st in range(len(ccl_stacks_simplified_a)):
+            for l in ccl_stacks_simplified_a[i_st].result():
+                all_labels.add(l)
+            print 'added labels from i_st = ',i_st
+        all_labels = sorted(all_labels)
+        self.all_original_labels = all_labels
+        self.to_simplified_labels={}
+        for i in range(len(all_labels)):
+            self.to_simplified_labels[all_labels[i]] = i
+
+        if self.to_simplified_labels[0] != 0:
+            raise ValueError('simplified label 0 does not map to zero! sl[0] = '+str(self.to_simplified_labels[0]))
+
+        print 'simplify_labels to_simplified_labels\n',self.to_simplified_labels
+        print 'simplify_labels n-ccl_stacks_b = ',len(self.ccl_stacks_b)
+        # apply the new labels
+        ccl_stacks_simplified_b = []
+        for i_st in range(len(self.ccl_stacks_b)):
+            print 'simplify_labels simplifying i_st = ',i_st
+            ccl_stacks_simplified_b.append(self.client.submit(simplify_stack,self.ccl_stacks_b[i_st],self.to_simplified_labels,i_st))
+        self.ccl_stacks_simplified_b = ccl_stacks_simplified_b
+
+        # serial version
+        # for i in range(len(self.ccl_results)):
+        #     for j in range(len(self.ccl_results[i])):
+        #         for k in range(len(self.ccl_results[i].m_results_translated)):
+        #             for l in np.unique(self.ccl_results[i].m_results_translated[k]):
+        #                 all_labels.add(l)
+        # all_labels = sorted(all_labels)
+        # self.all_original_labels = all_labels
+        # self.to_simplified_labels={}
+        # for i in range(len(all_labels)):
+        #     self.simplified_labels[all_labels[i]] = i
+        
+
+    def collect_simplified_results(self):
+        # This is serial. Load all onto the main node.
+        self.ccl_results_simplified_labels = []
+        for i_st in range(len(self.ccl_stacks_simplified_b)):
+            print 'collecting simplified result i_st = ',i_st,' of ',len(self.ccl_stacks_simplified_b)
+            # Collect the whole ccl data structure.
+            self.ccl_results_simplified_labels.append(self.ccl_stacks_simplified_b[i_st].result())
+            # Trimmed... self.ccl_results_simplified_labels.append(self.ccl_stacks_simplified_b[i_st].result().m_results_simple)
+
+    def collect_simplified_result_at_segment(self,iseg):
+        # This is serial. Load all onto the main node.
+        i_st = iseg
+        # Collect the whole ccl data structure.
+        return self.ccl_stacks_simplified_b[i_st].result()
             
+    def close(self):
+        "Shutdown DASK client."
         self.client.close()
             
 class Tests(unittest.TestCase):
@@ -1317,6 +1537,7 @@ class Tests(unittest.TestCase):
         ccl_dask_object.shift_labels()
         ccl_dask_object.make_translations()
         ccl_dask_object.apply_translations()
+        ccl_dask_object.close()
         
         ##################################################
         # Check results
