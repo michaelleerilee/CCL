@@ -666,7 +666,9 @@ def load_a_stack(fname):
     f_handle.close()
     return seg
 
-def make_blizz_mask(ghost_bottom,d,ghost_top,thresh_mnmx):
+def make_blizz_mask(ghost_bottom,d,ghost_top,thresh_mnmx,iseg,iseg_check=1):
+    if iseg == iseg_check:
+        print iseg,' mbm: ',type(ghost_bottom),type(ghost_top),thresh_mnmx
     if ghost_bottom is None:
         bottom  = []
         nbottom = 0
@@ -676,6 +678,7 @@ def make_blizz_mask(ghost_bottom,d,ghost_top,thresh_mnmx):
             bottom = ghost_bottom
         else:
             bottom = ghost_bottom[nbottom-2:nbottom]
+    nbottom = len(bottom)
     ndata   = len(d)
     if ghost_top is None:
         top  = []
@@ -685,25 +688,46 @@ def make_blizz_mask(ghost_bottom,d,ghost_top,thresh_mnmx):
         if ntop == 1:
             top = ghost_top
         else:
-            top = ghost_top[ntop-2:ntop]
-
-    temp_seg  = bottom+d+top
+            # top = ghost_top[ntop-2:ntop] bad.
+            top = ghost_top[0:2]
+    ntop = len(top)
+    
+    temp_seg  = bottom[:]+d[:]+top[:]
     ntemp_seg = len(temp_seg)
+
+    #### DEBUG ####
+    if iseg == iseg_check:
+        print iseg,' nbottom,ntop,ntemp_seg ',nbottom,ntop,ntemp_seg
+        for i in range(len(d)):
+            print iseg,' d[i] > 0 at ',i,(d[i]>0).sum(),' mx = ',np.amax(d[i])
+
+        for i in range(ntemp_seg):
+            print iseg,' temp_seg[i] > 0 at ',i,(temp_seg[i]>0).sum(),' mx = ',np.amax(temp_seg[i])
+    
+    ###############
 
     blizz_mask = []
     nshape = d[0].shape
     for islice in range(nbottom,nbottom+ndata):
         mask  = np.full(nshape,False,dtype=np.bool)
+        # mask  = np.full(nshape,True,dtype=np.bool)
         count = np.full(nshape,0,dtype=np.int)
 
         for j in range(-2,3):
             jcompare = j+islice
             if 0 <= jcompare and jcompare < ntemp_seg:
+                if iseg == iseg_check:
+                    print iseg,'isl,j,jc,mx(ts)',islice,j,jcompare,np.amax(temp_seg[jcompare])
                 count[np.where(temp_seg[jcompare] > thresh_mnmx[0])] += 1
 
+        if iseg == iseg_check:
+            print iseg,' nonzero count ',(count > 0).sum()
         mask[np.where(count >= 3)] = True
         blizz_mask.append(mask)
-    
+        if iseg == iseg_check:
+            print iseg,' mask.sum() ',mask.sum()
+
+    # blizz_mask = None
     return blizz_mask
 
 def make_a_stack(d,thresh_mnmx):
@@ -763,7 +787,7 @@ def apply_translations(translations,ccl_stack):
     return ccl_stack
 
 def simplify_get_orig_labels(ccl_stack):
-    print 'simplify_get'
+    # print 'simplify_get'
     all_labels = set()
     for im in range(len(ccl_stack.m_results_translated)):
         for l in np.unique(ccl_stack.m_results_translated[im]):
@@ -772,33 +796,33 @@ def simplify_get_orig_labels(ccl_stack):
     return all_labels
 
 def simplify_stack(ccl_stack,simplified_labels,i_st):
-    print i_st,'simplify_stack sl_keys = ',len(simplified_labels.keys())
+    # print i_st,'simplify_stack sl_keys = ',len(simplified_labels.keys())
     ccl_stack.m_results_simpleTrans = simplified_labels
     ccl_stack.m_results_simple      = []
-    print i_st,'simplify_stack len ccl_stack m_results_translated = ',len(ccl_stack.m_results_translated),type(ccl_stack.m_results_translated)
+    # print i_st,'simplify_stack len ccl_stack m_results_translated = ',len(ccl_stack.m_results_translated),type(ccl_stack.m_results_translated)
     for im in range(len(ccl_stack.m_results_translated)):
-        print i_st,'simplify_stack im,len m_r_trans = '\
-            ,im,len(ccl_stack.m_results_translated[im])\
-            ,type(ccl_stack.m_results_translated[im])\
-            ,ccl_stack.m_results_translated[im].shape
+        # print i_st,'simplify_stack im,len m_r_trans = '\
+        #     ,im,len(ccl_stack.m_results_translated[im])\
+        #     ,type(ccl_stack.m_results_translated[im])\
+        #     ,ccl_stack.m_results_translated[im].shape
         ccl_stack.m_results_simple.append(np.copy(ccl_stack.m_results_translated[im])) # append the im-th element
-        print i_st,'type ccl_stack.m_results_simple      ',type(ccl_stack.m_results_simple)
-        print i_st,'type ccl_stack.m_results_simple[im]  ',type(ccl_stack.m_results_simple[im])
-        print i_st,'ccl_stack.m_results_simple[im].shape ',ccl_stack.m_results_simple[im].shape
+        # print i_st,'type ccl_stack.m_results_simple      ',type(ccl_stack.m_results_simple)
+        # print i_st,'type ccl_stack.m_results_simple[im]  ',type(ccl_stack.m_results_simple[im])
+        # print i_st,'ccl_stack.m_results_simple[im].shape ',ccl_stack.m_results_simple[im].shape
         # Make the substitutions
-        count = 0
+        # count = 0
         for k in simplified_labels.keys():
             idx = np.where(ccl_stack.m_results_translated[im] == k)
-            if count % 50 == 0:
-                print 'k,len(idx): ',k,len(idx)
-                if len(idx) > 0:
-                    print 'k,sl[k] ',k,simplified_labels[k]
-                    print 'idx: ',idx
+            # if count % 50 == 0:
+            #    print 'k,len(idx): ',k,len(idx)
+            #    if len(idx) > 0:
+            #        print 'k,sl[k] ',k,simplified_labels[k]
+            #        print 'idx: ',idx
             #    print i_st,'simplify_stack count = ',count
-            count += 1
+            # count += 1
             ccl_stack.m_results_simple[im][idx] = simplified_labels[k]
             # ccl_stack.m_results_simple[im][np.where(ccl_stack.m_results_translated[im] == k)] = simplified_labels[k]
-    print i_st,'simplify_stack done'
+    # print i_st,'simplify_stack done'
     return ccl_stack
 
 class ccl_dask(object):
@@ -812,8 +836,13 @@ class ccl_dask(object):
         self.ccl_stacks_relabeled = []
         self.data_segs  = []
         self.nseg       = 0
+        self.data_segs_results = []
+        self.data_segs_results0 = []
+        
         # data_segs_blizz_3hour
         self.segs_blizz_mask = []
+        self.segs_blizz_mask_results = []
+        
         # The resulting ccl_marker_stacks
         self.ccl_results = []
         # Relabel with global, simplified labels
@@ -826,11 +855,16 @@ class ccl_dask(object):
 
     def load_data_segments_with_loader(self,loader,file_list,argList):
         # print 'argList: ',argList
+        self.data_segs = []
+        #### DEBUG
+        self.data_segs_results0 = []
         self.nseg = len(file_list)
         for fn in file_list:
             # print 'loading: ',fn
             self.data_segs.append(self.client.submit(loader,fn,argList))
             # self.data_segs.append(loader(fn,argList))
+            #### DEBUG
+            self.data_segs_results0.append(self.data_segs[-1].result())
             
     def load_data_segments(self,segments):
         self.nseg = len(segments)
@@ -842,28 +876,37 @@ class ccl_dask(object):
     def make_blizzard_stacks(self,thresh_mnmx):
         "Use the 3-hour blizzard criterion to make the blizzard mask and then construct the ccl_stack for tracking."
         self.thresh_mnmx = thresh_mnmx
+        
         # Blizzard 3-hours
         for i in range(self.nseg):
             if i == 0:
                 ghost_bottom = None
             else:
                 ghost_bottom = self.data_segs[i-1]
+
             if i == self.nseg-1:
                 ghost_top = None
             else:
                 ghost_top = self.data_segs[i+1]
                 
             self.segs_blizz_mask.append(self.client.submit(make_blizz_mask\
-                                                      ,ghost_bottom\
-                                                      ,self.data_segs[i]\
-                                                      ,ghost_top\
-                                                      ,self.thresh_mnmx))
+                                                           ,ghost_bottom\
+                                                           ,self.data_segs[i]\
+                                                           ,ghost_top\
+                                                           ,self.thresh_mnmx\
+                                                           ,i\
+                                                           ,0))
         # Track
         for i in range(self.nseg):
             self.ccl_stacks.append(self.client.submit(make_a_blizz_stack\
                                                       ,self.data_segs[i]\
                                                       ,self.thresh_mnmx\
                                                       ,self.segs_blizz_mask[i]))
+
+        #### DEBUG ####
+        for i in range(self.nseg):
+            self.segs_blizz_mask_results.append(self.segs_blizz_mask[i].result())
+        ###############
 
     # def make_stacks(self,thresh_mnmx):
     def make_stacks(self,thresh_mnmx):
@@ -962,6 +1005,12 @@ class ccl_dask(object):
         self.ccl_results = []
         for i_st in range(len(self.ccl_stacks_b)):
             self.ccl_results.append(self.ccl_stacks_b[i_st].result())
+
+        #### DEBUG ####
+        self.data_segs_result = []
+        for i in range(self.nseg):
+            self.data_segs_result.append(self.data_segs[i].result())
+        ###############
         
         # for i_st in range(len(self.ccl_stacks_b)):
         #     print 'i_st: ',i_st
@@ -1035,7 +1084,11 @@ class ccl_dask(object):
         i_st = iseg
         # Collect the whole ccl data structure.
         return self.ccl_stacks_simplified_b[i_st].result()
-            
+
+    def diagnose_parallel_simplify_0(self):
+        print 'ccl_dask to_simplified_labels ',self.to_simplified_labels
+        print 'ccl_dask all_original_labels  ',self.all_original_labels
+    
     def close(self):
         "Shutdown DASK client."
         self.client.close()
