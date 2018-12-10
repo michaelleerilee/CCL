@@ -666,7 +666,7 @@ def load_a_stack(fname):
     f_handle.close()
     return seg
 
-def make_blizz_mask(ghost_bottom,d,ghost_top,thresh_mnmx,iseg,iseg_check=1):
+def make_blizz_mask(ghost_bottom,d,ghost_top,thresh_mnmx,iseg,iseg_check=-1):
     if iseg == iseg_check:
         print iseg,' mbm: ',type(ghost_bottom),type(ghost_top),thresh_mnmx
     if ghost_bottom is None:
@@ -895,7 +895,7 @@ class ccl_dask(object):
                                                            ,ghost_top\
                                                            ,self.thresh_mnmx\
                                                            ,i\
-                                                           ,0))
+                                                           ,-1))
         # Track
         for i in range(self.nseg):
             self.ccl_stacks.append(self.client.submit(make_a_blizz_stack\
@@ -904,8 +904,9 @@ class ccl_dask(object):
                                                       ,self.segs_blizz_mask[i]))
 
         #### DEBUG ####
-        for i in range(self.nseg):
-            self.segs_blizz_mask_results.append(self.segs_blizz_mask[i].result())
+        if False:
+            for i in range(self.nseg):
+                self.segs_blizz_mask_results.append(self.segs_blizz_mask[i].result())
         ###############
 
     # def make_stacks(self,thresh_mnmx):
@@ -1038,7 +1039,8 @@ class ccl_dask(object):
         for i_st in range(len(ccl_stacks_simplified_a)):
             for l in ccl_stacks_simplified_a[i_st].result():
                 all_labels.add(l)
-            print 'added labels from i_st = ',i_st
+            if False:
+                print 'added labels from i_st = ',i_st
         all_labels = sorted(all_labels)
         self.all_original_labels = all_labels
         self.to_simplified_labels={}
@@ -1048,12 +1050,14 @@ class ccl_dask(object):
         if self.to_simplified_labels[0] != 0:
             raise ValueError('simplified label 0 does not map to zero! sl[0] = '+str(self.to_simplified_labels[0]))
 
-        print 'simplify_labels to_simplified_labels\n',self.to_simplified_labels
-        print 'simplify_labels n-ccl_stacks_b = ',len(self.ccl_stacks_b)
+        if False:
+            print 'simplify_labels to_simplified_labels\n',self.to_simplified_labels
+            print 'simplify_labels n-ccl_stacks_b = ',len(self.ccl_stacks_b)
         # apply the new labels
         ccl_stacks_simplified_b = []
         for i_st in range(len(self.ccl_stacks_b)):
-            print 'simplify_labels simplifying i_st = ',i_st
+            if False:
+                print 'simplify_labels simplifying i_st = ',i_st
             ccl_stacks_simplified_b.append(self.client.submit(simplify_stack,self.ccl_stacks_b[i_st],self.to_simplified_labels,i_st))
         self.ccl_stacks_simplified_b = ccl_stacks_simplified_b
 
