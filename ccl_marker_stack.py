@@ -17,10 +17,11 @@ ccl_marker_stack. Label a stack of 2d data slices using ccl2d.
 For license information see the file LICENSE that should have accompanied this source.
 
 """
+import json
 import unittest
 
 import cv2
-from dask.distributed import Client
+from dask.distributed import Client, wait
 import numpy as np
 import os
 from ccl2d import ccl2d
@@ -825,6 +826,29 @@ def simplify_stack(ccl_stack,simplified_labels,i_st):
     # print i_st,'simplify_stack done'
     return ccl_stack
 
+def save_results_simplified_labels(filename,ext,ccl_results_simplified_labels_at_seg):
+    count = 0
+    if ext == 'json':
+        with open(filename+'.'+ext,'w') as f:
+            ccl_results_simplified_labels_output={}
+            ccl_results_simplified_labels_output['info']='save_results_simplified_labels, version 1'
+            ccl_results_simplified_labels_output['data:m_results_simple']\
+                =map(lambda x: x.tolist(),ccl_results_simplified_labels_at_seg.m_results_simple)
+            json.dump(ccl_results_simplified_labels_output,f)
+            #for isl in range(len(ccl_results_simplified_labels_at_seg.m_results_simple)):
+            #    # for isl in the segment...
+            #    # ccl_results_simplified_labels_at_seg.m_results_simple[isl][:,:]
+            #    json.dump()
+            count += len(ccl_results_simplified_labels_at_seg.m_results_simple)
+    # elif ext == 'nc':
+    else:
+        with open(filename,'w') as f:
+            for isl in range(len(ccl_results_simplified_labels_at_seg.m_results_simple)):
+                f.write('ccl_results_simplified_labels_at_seg['+str(isl)+'] not implemented for ext='+ext+'\n')
+                count += 1
+                
+    return count
+
 class ccl_dask(object):
     def __init__(self,client=None): 
         # self.client = Client()
@@ -832,6 +856,8 @@ class ccl_dask(object):
             self.client = Client('localhost:8786')
         else:
             self.client = client            
+
+        # ccl_stack(s) are all ccl_marker_stacks
         self.ccl_stacks           = []
         self.ccl_stacks_relabeled = []
         self.data_segs  = []
@@ -1072,16 +1098,36 @@ class ccl_dask(object):
         # self.to_simplified_labels={}
         # for i in range(len(all_labels)):
         #     self.simplified_labels[all_labels[i]] = i
-        
+
+    def wait_on_results(self):
+        wait(self.ccl_stacks_simplified_b)
+        return
 
     def collect_simplified_results(self):
-        # This is serial. Load all onto the main node.
+        # self.client.gather(self.ccl_stacks_simplified_b)
+        # self.ccl_results_simplified_labels = self.ccl_stacks_simplified_b
+        
+        # This is serial. Load all onto the main node. Written before I knew about client.gather.
         self.ccl_results_simplified_labels = []
         for i_st in range(len(self.ccl_stacks_simplified_b)):
             print 'collecting simplified result i_st = ',i_st,' of ',len(self.ccl_stacks_simplified_b)
             # Collect the whole ccl data structure.
             self.ccl_results_simplified_labels.append(self.ccl_stacks_simplified_b[i_st].result())
             # Trimmed... self.ccl_results_simplified_labels.append(self.ccl_stacks_simplified_b[i_st].result().m_results_simple)
+        return
+
+    def save_simplified_results(self,filepathname,ext='json'):
+        self.write_ccl_results_simplified_labels = []
+        # Iterate over the future stacks. 
+        for i_st in range(len(self.ccl_stacks_simplified_b)):
+            # ccl_stacks_simplified_b are ccl_marker_stack futures
+            self.write_ccl_results_simplified_labels\
+                .append(self.client.submit(save_results_simplified_labels\
+                                           ,filepathname+str(i_st),ext\
+                                           ,self.ccl_stacks_simplified_b[i_st]))
+        # self.client.gather(self.write_ccl_results_simplified_labels)
+        wait(self.write_ccl_results_simplified_labels)
+        return
 
     def collect_simplified_result_at_segment(self,iseg):
         # This is serial. Load all onto the main node.
@@ -1092,11 +1138,13 @@ class ccl_dask(object):
     def diagnose_parallel_simplify_0(self):
         print 'ccl_dask to_simplified_labels ',self.to_simplified_labels
         print 'ccl_dask all_original_labels  ',self.all_original_labels
+        return
     
     def close(self):
         "Shutdown DASK client."
         self.client.close()
-            
+        return
+    
 class Tests(unittest.TestCase):
 
     def test_diagonals(self):
