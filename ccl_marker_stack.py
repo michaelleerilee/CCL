@@ -850,10 +850,13 @@ def save_results_simplified_labels(filename,ext,ccl_results_simplified_labels_at
     return count
 
 class ccl_dask(object):
-    def __init__(self,client=None): 
+    def __init__(self,client=None,timeout=None): 
         # self.client = Client()
         if client is None:
-            self.client = Client('localhost:8786')
+            if timeout is None:
+                self.client = Client('localhost:8786')
+            else:
+                self.client = Client('localhost:8786',timeout=timeout)
         else:
             self.client = client            
 
@@ -863,7 +866,8 @@ class ccl_dask(object):
         self.data_segs  = []
         self.nseg       = 0
         self.data_segs_results = []
-        self.data_segs_results0 = []
+        #### DEBUG
+        #### self.data_segs_results0 = []
         
         # data_segs_blizz_3hour
         self.segs_blizz_mask = []
@@ -883,14 +887,14 @@ class ccl_dask(object):
         # print 'argList: ',argList
         self.data_segs = []
         #### DEBUG
-        self.data_segs_results0 = []
+        #### self.data_segs_results0 = []
         self.nseg = len(file_list)
         for fn in file_list:
             # print 'loading: ',fn
             self.data_segs.append(self.client.submit(loader,fn,argList))
             # self.data_segs.append(loader(fn,argList))
             #### DEBUG
-            self.data_segs_results0.append(self.data_segs[-1].result())
+            #### self.data_segs_results0.append(self.data_segs[-1].result())
             
     def load_data_segments(self,segments):
         self.nseg = len(segments)
