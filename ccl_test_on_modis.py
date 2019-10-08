@@ -14,9 +14,10 @@ import numpy as np
 from ccl_marker_stack import ccl_marker_stack
 
 if __name__ == '__main__':
-    print 'ccl_test_on_modis.py'
+    print('ccl_test_on_modis.py')
 
     if True:
+# Set up the color map for displaying results.
         cm        = np.zeros((256,1,3),np.uint8)
         cm[:,0,0] = 255-np.arange(256)
         cm[:,0,1] = (np.arange(256)*(255-np.arange(256)))/255
@@ -73,7 +74,8 @@ if __name__ == '__main__':
         #             ,'MOD08_D3.A2015305.061.2017323113224.hdf'\
         # ]
         
-        src_dir    = '/home/mrilee/data/NOGGIN/MODIS-61/'
+        # src_dir    = '/home/mrilee/data/NOGGIN/MODIS-61/'
+        src_dir    = '/mnt/hgfs/MicronFedora-1/'
         field_name = 'Atmospheric_Water_Vapor_Mean'
     
         data_thresh_mnmx = (6.892,8)
@@ -88,7 +90,7 @@ if __name__ == '__main__':
         )
         obj.data[:,0:269] = 0
         # m0 = ccl2d(obj.data,data_thresh_mnmx,graph=False)
-        print 'data-mnmx: ',np.amin(obj.data),np.amax(obj.data)
+        print('data-mnmx: ',np.amin(obj.data),np.amax(obj.data))
         i += 1
 
         marker_stack.make_slice_from(obj.data,data_thresh_mnmx)
@@ -101,8 +103,11 @@ if __name__ == '__main__':
                                 ,datafieldname=field_name\
                                 ,srcdirname=src_dir\
             )
+
+            # Reduce the scale of the data being processed.
             obj.data[:,0:269] = 0
-            print 'data-mnmx: ',np.amin(obj.data),np.amax(obj.data)
+
+            print( 'data-mnmx: ',np.amin(obj.data),np.amax(obj.data) )
             # m1 = ccl2d(obj.data,data_thresh_mnmx,graph=False)
             i += 1
 
@@ -118,11 +123,11 @@ if __name__ == '__main__':
             
             done = (i >= len(src_files))
             
-        print 'len(m_results): ',marker_stack.len()
+        print( 'len(m_results): ',marker_stack.len() )
 
         if False:
             for i in range(len(m_results)):
-                print 'i,x: ',i,m_results[i][1]
+                print( 'i,x: ',i,m_results[i][1] )
 
         # # age...
         # m=m_results[-1][0].copy()
@@ -182,14 +187,14 @@ if __name__ == '__main__':
         i = 0
         for imr in marker_stack.m_results_translated:
             # print 'i.shape: ',i[0].shape
-            print 'i.mnmx:  ',i,np.amin(imr),np.amax(imr)
+            print( 'i.mnmx:  ',i,np.amin(imr),np.amax(imr) )
 
-        print 'len(m_results_translated): ',marker_stack.len_translated()
+        print( 'len(m_results_translated): ',marker_stack.len_translated() )
 
         if True:
-            print 'a900: ',len(marker_stack.copy_of_translations())
+            print( 'a900: ',len(marker_stack.copy_of_translations()) )
             for k in range(marker_stack.len()):
-                print 'k,x: ',k,marker_stack.copy_of_translations_at(k)
+                print( 'k,x: ',k,marker_stack.copy_of_translations_at(k) )
             
         if True:
             np.set_printoptions(threshold=4000,linewidth=400 )
@@ -200,7 +205,7 @@ if __name__ == '__main__':
                 dlon = dlat
                 lat0 = 180 - dlat
                 lon0 = 360 - dlon
-                print 'k, imr: ',k,'\n',np.array_str(imr[lat0:lat0+dlat,lon0:lon0+dlon])
+                print( 'k, imr: ',k,'\n',np.array_str(imr[lat0:lat0+dlat,lon0:lon0+dlon]) )
                 k += 1
             np.set_printoptions(threshold=1000,linewidth=75)
 
@@ -218,7 +223,7 @@ if __name__ == '__main__':
                 dlon = dlat
                 lat0 = 180 - dlat
                 lon0 = 360 - dlon
-                print 'i,m_age: ',im,'\n',np.array_str(111*imr[lat0:lat0+dlat,lon0:lon0+dlon])
+                print( 'i,m_age: ',im,'\n',np.array_str(111*imr[lat0:lat0+dlat,lon0:lon0+dlon]) )
                 im += 1
             np.set_printoptions(threshold=1000,linewidth=75)
             
@@ -237,10 +242,9 @@ if __name__ == '__main__':
                 mi[:,:] = (imr.astype(np.float)/norm)
                 mi = cv2.applyColorMap(mi,cm)
                 cv2.imshow(str(i),mi)
-                print 'im i mnmx: ',i,np.amin(mi[np.where(mi > 0)]),np.amax(mi)
+                print( 'im i mnmx: ',i,np.amin(mi[np.where(mi > 0)]),np.amax(mi) )
                 i += 1
             cv2.waitKey(0); cv2.destroyAllWindows()
-
             
         if False:
             m0_new = marker_stack.m_results_translated[0]
@@ -259,20 +263,20 @@ if __name__ == '__main__':
             m0i = cv2.applyColorMap(m0i,cm)
             m1i = cv2.applyColorMap(m1i,cm)
 
-            print 'm0  mnmx: ',np.amin(m0[np.where(m0>0)]),np.amax(m0)
-            print 'm1  mnmx: ',np.amin(m1[np.where(m1>0)]),np.amax(m1)
-            print 'm0n mnmx: ',np.amin(m0_new[np.where(m0_new>0)]),np.amax(m0_new)
-            print 'm1n mnmx: ',np.amin(m1_new[np.where(m1_new>0)]),np.amax(m1_new)
+            print( 'm0  mnmx: ',np.amin(m0[np.where(m0>0)]),np.amax(m0) )
+            print( 'm1  mnmx: ',np.amin(m1[np.where(m1>0)]),np.amax(m1) )
+            print( 'm0n mnmx: ',np.amin(m0_new[np.where(m0_new>0)]),np.amax(m0_new) )
+            print( 'm1n mnmx: ',np.amin(m1_new[np.where(m1_new>0)]),np.amax(m1_new) )
             
             if False:
                 cv2.imshow('m0',m0_new.astype(np.float)/np.amax(m0_new)); cv2.waitKey(0); cv2.destroyAllWindows()
                 cv2.imshow('m1',m1_new.astype(np.float)/np.amax(m1_new)); cv2.waitKey(0); cv2.destroyAllWindows()
             if True:
-                print 'translation01: ',translation01
-                cv2.imshow('m0',m0i); # cv2.waitKey(0); cv2.destroyAllWindows()
-                cv2.imshow('m1',m1i); cv2.waitKey(0); cv2.destroyAllWindows()
+                print( 'translation01: ',translation01 )
+                cv2.imshow('m0 - Press q to close cleanly',m0i); # cv2.waitKey(0); cv2.destroyAllWindows()
+                cv2.imshow('m1 - Press q to close cleanly',m1i); cv2.waitKey(0); cv2.destroyAllWindows()
 
 
 
-    print 'done\nccl_test_on_modis.py'
+    print( 'done\nccl_test_on_modis.py' )
 

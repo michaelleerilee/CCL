@@ -8,9 +8,26 @@ Simplest usage:
 
 where data_slices is a list of 2D numpy arrays.
 
+
+Note: data_threshold_mnmx is a misnomer. To clarify.
+
+  data_threshold_mnmx = (trigger, data_value_out)
+
+The trigger is the data value that the thresholding routine cv2.threshold uses
+to determine what is "in" vs. what is excluded. Default operation is that data
+values below trigger (the threshold) are accepted. Acceptance of a pixel is 
+noted in the output image array by setting the output pixel to data_value_out.
+Hence the output array of cv2.threshold has a range of two values {0,mx}
+where all values of the input array greater than trigger (the mn) are 
+sent to mx, where mx is data_value_out. 
+
+Our options have expanded as we have added thresh_inverse and perform_threshold, 
+which invert the thresholding described above. That is, acceptance is still 
+denoted by data_value_out, but triggered by data values below trigger.
+
 --
 
-Copyright © 2018 Michael Lee Rilee, mike@rilee.net, Rilee Systems Technologies LLC
+Copyright © 2018-2019 Michael Lee Rilee, mike@rilee.net, Rilee Systems Technologies LLC
 
 ccl_marker_stack. Label a stack of 2d data slices using ccl2d.
 
@@ -25,32 +42,34 @@ import numpy as np
 import os
 from ccl2d import ccl2d
 
+from stopwatch import sw_timer
+
 def ccl_backsub(m,translations):
     "Apply the translations to the markers m."
     if translations is None or translations == []:
-        # print 'ccl_backsub: copy'
+        # print( 'ccl_backsub: copy' )
         mx = m.copy()
     else:
-        # print 'ccl_backsub: translate'
+        # print( 'ccl_backsub: translate' )
         # mx = np.zeros(m.shape)
         mx = m.copy()
         m_unique = np.unique(m)
         for im in m_unique:
             for x in translations:
                 if im in x[0]:
-                    # print 'ccl_backsub: translate subs',x
+                    # print( 'ccl_backsub: translate subs',x )
                     #if im == 20:
-                    #    print mx[40:50,320:330]
+                    #    print( mx[40:50,320:330] )
                     mx[np.where(m == im)] = x[1]
                     #if im == 20:
-                    #    print mx[40:50,320:330]
-    #print 'cc100'
-    #print mx[40:50,320:330]
+                    #    print( mx[40:50,320:330] )
+    #print( 'cc100' )
+    #print( mx[40:50,320:330] )
     return mx.copy()
 
 def ccl_compose_translations(x0,x1):
-    # print 'b99: x0:  ',x0
-    # print 'b99: x1:  ',x1
+    # print( 'b99: x0:  ',x0 )
+    # print( 'b99: x1:  ',x1 )
     x01 = []
     # i in x0 lands on j in x1, gotta relabel
     for j in x1:
@@ -81,38 +100,39 @@ def ccl_compose_translations(x0,x1):
             # j doesn't map to an ij, so add directly
             x01.append(j)
            
-    # print 'b99: x01: ',x01
+    # print( 'b99: x01: ',x01 )
     return x01
                 
 
-def ccl_relabel2(m0,m1,verbose=False,marker_base=None):
+def ccl_relabel2(m0,m1,verbose=False,marker_base=None,global_latlon_grid=True):
     """Identify structures in common between the two 2D numpy arrays m0 and m1. Structures merging and splitting from one array to the next cause labels to be degenerate, i.e. you have multiple labels for the same 2D+1 structure. This routine returns a 5-tuple (m0n,m1n,m0eol,translation01,translation11). m0n and m1n are relabeled. Coalesced labels are given a new number and the old numbers are 'lost,' which is why we return the translation lists translation01 and translation01. m0eol is a list of structures in m0 that are not found in m1, hence eol, end-of-life. translation01: m0 -> m0_new and translation11: m1 -> m1_new. If m0 and m1 have completely different labeling schemes, one might say the two translations are two separate functions from two different domains to the same range. t01: 0->1, while arguably t11: 1->1.
 """
 
+    sw_timer.stamp("cms:relabel2 start")
     ## m0[np.where(m0 > 0)] += marker_base
     ## marker_base += np.max(m0)
     if marker_base is None:
         marker_base = np.max(m0)
     marker_base_0 = marker_base
     
-    # print '00-markers-shape: ',m0.shape
-    # print '00-markers-type:  ',type(m0)
-    # print '00-markers-dtype: ',m0.dtype
-    # print '00-markers-mnmx:  ',np.min(m0[np.where(m0 > 0)])\
+    # print( '00-markers-shape: ',m0.shape )
+    # print( '00-markers-type:  ',type(m0) )
+    # print( '00-markers-dtype: ',m0.dtype )
+    # print( '00-markers-mnmx:  ',np.min(m0[np.where(m0 > 0)])\ )
     #     ,np.max(m0[np.where(m0 > 0)])
-    # print '00-markers:       ',m0
-    # print '00-markers-1:     ',m0.astype(np.float)/np.amax(m0)
+    # print( '00-markers:       ',m0 )
+    # print( '00-markers-1:     ',m0.astype(np.float)/np.amax(m0) )
 
     m1_save = m1.copy()
     m1[np.where(m1 > 0)] += marker_base
     marker_base += np.max(m1)
-    # print '01-markers-shape: ',m1.shape
-    # print '01-markers-type:  ',type(m1)
-    # print '01-markers-dtype: ',m1.dtype
-    # print '01-markers-mnmx:  ',np.min(m1[np.where(m1 > 0)])\
+    # print( '01-markers-shape: ',m1.shape )
+    # print( '01-markers-type:  ',type(m1) )
+    # print( '01-markers-dtype: ',m1.dtype )
+    # print( '01-markers-mnmx:  ',np.min(m1[np.where(m1 > 0)])\ )
     #   ,np.max(m1[np.where(m1 > 0)])
-    # print '01-markers:       ',m1
-    # print '01-markers-1:     ',m1.astype(np.float)/np.amax(m1)
+    # print( '01-markers:       ',m1 )
+    # print( '01-markers-1:     ',m1.astype(np.float)/np.amax(m1) )
 
     # m1[:,:] = m0[:,:]
     # markers_tmp = np.zeros(m0.shape,dtype=np.float)
@@ -131,16 +151,16 @@ def ccl_relabel2(m0,m1,verbose=False,marker_base=None):
     if tmp_mx == 0:
         tmp_mx = 1
     tmp[:,:] = tmp/tmp_mx
-    # print 'max(tmp): ',np.max(tmp)
+    # print( 'max(tmp): ',np.max(tmp) )
     itmp = np.zeros(m0.shape,dtype=np.uint8)
     itmp[np.where(tmp > 0)] = 255
-    # print 'max(itmp): ',np.max(itmp)
+    # print( 'max(itmp): ',np.max(itmp) )
     # cv2.imshow('itmp',itmp); cv2.waitKey(0); cv2.destroyAllWindows()
     # tmp = m0
-    # print 'max(tmp): ',np.max(tmp)
+    # print( 'max(tmp): ',np.max(tmp) )
     # markers_sum[:,:] = 255*(tmp/np.max(tmp))
     markers_sum[:,:] = itmp
-    # print 'max(markers_sum): ',np.max(markers_sum)
+    # print( 'max(markers_sum): ',np.max(markers_sum) )
 
     # cv2.imshow('markers sum',markers_sum); cv2.waitKey(0); cv2.destroyAllWindows()
     
@@ -151,14 +171,17 @@ def ccl_relabel2(m0,m1,verbose=False,marker_base=None):
 #                                ,1,np.max(markers_sum)\
 
     # cv2.imshow('thresh',thresh.astype(np.float)/np.amax(thresh)); cv2.waitKey(0); cv2.destroyAllWindows()
-    
-    # ret, markers01 = cv2.connectedComponents(thresh)
-    markers01 = ccl2d(thresh,(254,255))
 
+    # print(1000)
+    # ret, markers01 = cv2.connectedComponents(thresh)
+    markers01 = ccl2d(thresh,(254,255)
+                      ,global_latlon_grid = global_latlon_grid
+                  )
+    # print(2000)
     # cv2.imshow('markers01',markers01.astype(np.float)/np.amax(markers01)); cv2.waitKey(0); cv2.destroyAllWindows()
 
     idx_00_01 = np.where((thresh == 255) & (m0 != 0))
-    # print 'idx_00_01: ',idx_00_01
+    # print( 'idx_00_01: ',idx_00_01 )
 
     def map_slice_to_combined(m,markers,thresh):
         idx = np.where((thresh == 255) & (m != 0))
@@ -173,24 +196,28 @@ def ccl_relabel2(m0,m1,verbose=False,marker_base=None):
 
     id_00_01 = map_slice_to_combined(m0,markers01,thresh)
     id_01_01 = map_slice_to_combined(m1,markers01,thresh)
+
+    # print(3000)
     
     # if verbose:
     if False:
-        print 'id_00_01: ',id_00_01
+        print( 'id_00_01: ',id_00_01 )
             
     # if verbose:
     if False:
-        print 'id_01_01: ',id_01_01
-        print 'np.unique(m0): ',np.unique(m0)
+        print( 'id_01_01: ',id_01_01 )
+        print( 'np.unique(m0): ',np.unique(m0) )
 
     # Detect forking
     marker_fork_equivalence_sets = []
     # Go over the map from 0 to 01
 
     if False:
-        print 'len(id_00_01): ',len(id_00_01)
+        print( 'len(id_00_01): ',len(id_00_01) )
 
     # r0 = id_00_01[i,1]
+
+    sw_timer.stamp("cms:relabel2 translation tables A")
 
     markers_unique = np.unique(markers01)
 
@@ -216,30 +243,32 @@ def ccl_relabel2(m0,m1,verbose=False,marker_base=None):
             rs.append([set(r),set(s)])
         i += 1
 
+    sw_timer.stamp("cms:relabel2 translation tables B")
+
     done = False
     while not done:
-        # print 'rs: ',rs
+        # print( 'rs: ',rs )
         rs_tmp = []
         done = True
         for i in range(len(rs)):
-            # print '0 rs_tmp: ',rs_tmp
+            # print( '0 rs_tmp: ',rs_tmp )
             ri = rs[i][0]
             si = rs[i][1]
             for j in range(i+1,len(rs)):
                 rj = rs[j][0]
                 sj = rs[j][1]
-                # print '100: ',ri,rj,ri & rj,ri & rj != set([])
+                # print( '100: ',ri,rj,ri & rj,ri & rj != set([]) )
                 if ri & rj != set([]):
-                    # print '101:'
+                    # print( '101:' )
                     done = False
                     ri = ri | rj
                     si = si | sj
             for j in range(i+1,len(rs)):
                 rj = rs[j][0]
                 sj = rs[j][1]
-                # print '110: ',si,sj,si & sj,si & sj != set([])
+                # print( '110: ',si,sj,si & sj,si & sj != set([]) )
                 if si & sj != set([]):
-                    # print '111:'
+                    # print( '111:' )
                     done = False
                     ri = ri | rj
                     si = si | sj
@@ -258,30 +287,32 @@ def ccl_relabel2(m0,m1,verbose=False,marker_base=None):
             if not overlap_found:
                 if (ri != set([])) and (si != set([])):
                     rs_tmp.append([ri,si])
-            # print '2 rs_tmp: ',rs_tmp
+            # print( '2 rs_tmp: ',rs_tmp )
         rs = rs_tmp
 
     marker_fork_equivalence_sets = rs
+
+    sw_timer.stamp("cms:relabel2 translation tables C")
                     
     # i = 0
     # while i < len(id_00_01):
-    #     print 'i:  ',i
+    #     print( 'i:  ',i )
     #     # Get a target from 01
     #     r0 = id_00_01[i][1]
-    #     # print 'r0: ',r0
+    #     # print( 'r0: ',r0 )
     #     r = []
     #     for j in range(i,len(id_00_01)):
-    #         # print 's0 comparing: ',id_00_01[j][1],' to r0=',r0
+    #         # print( 's0 comparing: ',id_00_01[j][1],' to r0=',r0 )
     #         # Have we
     #         if (r0 == id_00_01[j][1]):
-    #             print 'appending r: ',id_00_01[j][0]
+    #             print( 'appending r: ',id_00_01[j][0] )
     #             if id_00_01[j][0] not in r:
     #                 r.append(id_00_01[j][0])
     #     if r != []:
     #         s=[]
     #         for j in range(len(id_01_01)):
     #             if r0 == id_01_01[j][1]:
-    #                 print 'appending s: ',id_01_01[j][0]
+    #                 print( 'appending s: ',id_01_01[j][0] )
     #                 if id_01_01[j][0] not in s:
     #                     s.append(id_01_01[j][0])
     #             
@@ -291,7 +322,7 @@ def ccl_relabel2(m0,m1,verbose=False,marker_base=None):
     #     i += 1
 
     if False:
-        print 'marker_fork_equiv: ',marker_fork_equivalence_sets
+        print( 'marker_fork_equiv: ',marker_fork_equivalence_sets )
 
     marker_current = marker_base
     m0_new = np.zeros(m0.shape,dtype=np.int)
@@ -312,33 +343,35 @@ def ccl_relabel2(m0,m1,verbose=False,marker_base=None):
         for j in m1s:
             m1_new[np.where(m1 == j)] = marker_current
 
-        # print 'i,m0s,m1s,marker: ',i,m0s,m1s,marker_current
+        # print( 'i,m0s,m1s,marker: ',i,m0s,m1s,marker_current )
         
         marker_current += 1
 
     marker_base = marker_current
+
+    sw_timer.stamp("cms:relabel2 translation tables D")
     
-    # print 'equivalence sets k= ',len(marker_fork_equivalence_sets)
+    # print( 'equivalence sets k= ',len(marker_fork_equivalence_sets) )
 
     k = 0
     for i in np.unique(m1):
         if i not in relabeled5:
             m1_new[np.where(m1 == i)] = i
             k = k + 1
-    # print 'independent sets in m1 k= ',k
+    # print( 'independent sets in m1 k= ',k )
 
     k = 0
     for i in np.unique(m0):
         if i not in relabeled4:
             m0_new[np.where(m0 == i)] = i
             k = k + 1
-    # print 'independent sets in m0 k= ',k
+    # print( 'independent sets in m0 k= ',k )
     
     m0_new_unique = np.unique(m0_new)
-    # print 'unique(m0_new): ',m0_new_unique
+    # print( 'unique(m0_new): ',m0_new_unique )
     
     m1_new_unique = np.unique(m1_new)
-    # print 'unique(m1_new): ',m1_new_unique
+    # print( 'unique(m1_new): ',m1_new_unique )
 
     # Compress labels above marker_base_0
     old_labels_to_replace            = m1_new_unique[np.where(m1_new_unique > marker_base_0)]
@@ -361,16 +394,17 @@ def ccl_relabel2(m0,m1,verbose=False,marker_base=None):
     marker_base = np.amax(m1_new)
 
     m0_new_unique = np.unique(m0_new)
-    # print 'unique(m0_new): ',m0_new_unique
+    # print( 'unique(m0_new): ',m0_new_unique )
     
     m1_new_unique = np.unique(m1_new)
-    # print 'unique(m1_new): ',m1_new_unique
+    # print( 'unique(m1_new): ',m1_new_unique )
     
     m0_eol = []
     for i in range(1,len(m0_new_unique)):
         if m0_new_unique[i] not in m1_new_unique:
             m0_eol.append(m0_new_unique[i])
 
+    sw_timer.stamp("cms:relabel2 translation tables E")
     
     # eol means that it has no entry in the translation01
     # For cases where we are tracking more than one previous history item,
@@ -378,8 +412,8 @@ def ccl_relabel2(m0,m1,verbose=False,marker_base=None):
     # We can use a translation01 table to go back in time to relabel the
     # histories if needed.
 
-    # print 'm0_eol: ',m0_eol
-    # print 'xlat:   ',translation01
+    # print( 'm0_eol: ',m0_eol )
+    # print( 'xlat:   ',translation01 )
 
     # translation01 maps 4's ids to the reconciled 5. Both 4_new and 5_new have the
     # New ids. I guess we could leave 4 alone, and just populate the translation01 table--
@@ -401,34 +435,39 @@ def ccl_relabel2(m0,m1,verbose=False,marker_base=None):
     m1_new_unique = np.unique(m1_new)
 
     if False:
-        print 'm0:            \n',m0
-        print 'm1_save:       \n',m1_save
-        print 'm1_new:        \n',m1_new
-        print 'n1_new_unique: \n',m1_new_unique
-        print '----'
+        print( 'm0:            \n',m0 )
+        print( 'm1_save:       \n',m1_save )
+        print( 'm1_new:        \n',m1_new )
+        print( 'n1_new_unique: \n',m1_new_unique )
+        print( '----' )
+
+    sw_timer.stamp("cms:relabel2 translation tables F")
     
     for i in range(1,len(m1_new_unique)):
         x_11n = m1_save[np.where(m1_new == m1_new_unique[i])]
         if False:
-            print 'i,x_11n: ',i,x_11n,', bool: ',type(x_11n),', size= ',x_11n.size
+            print( 'i,x_11n: ',i,x_11n,', bool: ',type(x_11n),', size= ',x_11n.size )
         # if x_11n != []:
         if x_11n.size > 0:
             if False:
-                print '-:'
+                print( '-:' )
             translation11.append([set(x_11n),m1_new_unique[i]])
         else:
             if False:
-                print '+:',[set(x_11n),m1_new_unique[i]]
-            
+                print( '+:',[set(x_11n),m1_new_unique[i]] )
+
+
+    sw_timer.stamp("cms:relabel2 end")
     return (m0_new,m1_new,m0_eol,translation01,translation11)
 
 class ccl_marker_stack(object):
-    def __init__(self):
+    def __init__(self,global_latlon_grid = True):
         self.m_results            = []
         self.m_results_translated = []
         self.m_ages               = {}
         self.translations         = []
         self.marker_base          = 0
+        self.global_latlon_grid   = global_latlon_grid
 
 # To merge two stacks, we need to identify the mapping between the two
 # sets of labels at the interface. The labels at the bottom start
@@ -473,21 +512,21 @@ class ccl_marker_stack(object):
             new_translations = []
             if self.m_results[i][1] != []:
                 for j in range(len(self.m_results[i][1])):
-                    # print '---\ni: ',i
-                    # print 'shift_labels: ',self.m_results[i],'the marker,translation pair from a set of ids to the current id'
-                    # print 'shift_labels: ',self.m_results[i][1], 'the translations component, a list of set(l0),[l1] pairs'
-                    # print 'shift_labels: ',self.m_results[i][1][0], 'the 0th translation'
+                    # print( '---\ni: ',i )
+                    # print( 'shift_labels: ',self.m_results[i],'the marker,translation pair from a set of ids to the current id' )
+                    # print( 'shift_labels: ',self.m_results[i][1], 'the translations component, a list of set(l0),[l1] pairs' )
+                    # print( 'shift_labels: ',self.m_results[i][1][0], 'the 0th translation' )
                     # for x in self.m_results[i][1]:
-                    #     print 'shift_labels:  ',x, 'a translation'
+                    #     print( 'shift_labels:  ',x, 'a translation' )
                     # for x in self.m_results[i][1][0]:
-                    #     print 'shift_labels:  ',x,'A piece of a translation'
-                    # print 'shift_labels: ',self.m_results[i][1][0][1],'range of the 0th'
-                    # print '+--'
-                    # print 'domain:  ',[ x    for x in self.m_results[i][1]]
-                    # print 'domain:  ',[ x[0] for x in self.m_results[i][1]]
-                    # print 'domain:  ',[ r for r in x[0] for x in self.m_results[i][1]]
-                    # print 'domain:  ',[ r + id_delta if r > 0 else r for r in x[0] for x in self.m_results[i][1]]
-                    # print 'range:   ',[ s + id_delta if s > 0 else s for s in [x[1]] for x in self.m_results[i][1]]
+                    #     print( 'shift_labels:  ',x,'A piece of a translation' )
+                    # print( 'shift_labels: ',self.m_results[i][1][0][1],'range of the 0th' )
+                    # print( '+--' )
+                    # print( 'domain:  ',[ x    for x in self.m_results[i][1]] )
+                    # print( 'domain:  ',[ x[0] for x in self.m_results[i][1]] )
+                    # print( 'domain:  ',[ r for r in x[0] for x in self.m_results[i][1]] )
+                    # print( 'domain:  ',[ r + id_delta if r > 0 else r for r in x[0] for x in self.m_results[i][1]] )
+                    # print( 'range:   ',[ s + id_delta if s > 0 else s for s in [x[1]] for x in self.m_results[i][1]] )
                     # x = []
                     # id_domain = [ r + id_delta if r > 0 else r for r in x[0] for x in self.m_results[i][1] ]
                     x = self.m_results[i][1][j]
@@ -501,19 +540,19 @@ class ccl_marker_stack(object):
                     if len(id_range) == 1:
                         id_range = id_range[0]
                     else:
-                        print 'WARNING shift_labels detected multiple-element range'
+                        print( 'WARNING shift_labels detected multiple-element range' )
                     new_translations.append([ id_domain, id_range ])
                 self.m_results[i][1] = new_translations
 # prefer this...                        [ s + id_delta if s > 0 else s for s in [x[1]] for x in self.m_results[i][1]] ]
 
-                # print 'result0:   \n',self.m_results[i][0]
-                # print 'result1:   \n',self.m_results[i][1]
-                # print 'range:   ',[s + id_delta if s > 0 else s for s in x[1] for x in self.m_results[i][1][0] ]
+                # print( 'result0:   \n',self.m_results[i][0] )
+                # print( 'result1:   \n',self.m_results[i][1] )
+                # print( 'range:   ',[s + id_delta if s > 0 else s for s in x[1] for x in self.m_results[i][1][0] ] )
                 
-        # print '+++'
+        # print( '+++' )
         # revalidate the applied translations and ages
         # for i in self.m_results:
-        #     print 'm_result\n',i
+        #     print( 'm_result\n',i )
         self.resolve_labels_across_stack()
 
 #segmented    def compare_slices_at_interface(stack0,stack1):
@@ -531,16 +570,25 @@ class ccl_marker_stack(object):
 #segmented        stack1.m_results[ 0][1] = 
         
     # When a slice is added, it is ccl'd, which has labels starting at 1. 
-    # To avoid collisions, the maximum label of the prvious slice is added to
+    # To avoid collisions, the maximum label of the previous slice is added to
     # the labels of the new slice. In relabel2, We identify coincidences
     # between the labels between the two slices, and handle any merges
     # or splits. In general, merges eliminate labels, so we rename the
     # labels so there are no gaps in the labels used in the new slice. A
     # list of translations between adjacent slices is maintained.
     #
-    def make_slice_from(self,data,data_threshold_mnmx,graph=False):
+    def make_slice_from(self,data,data_threshold_mnmx,graph=False
+                        ,thresh_inverse=False
+                        ,norm_data=True
+                        ,perform_threshold=True):
+
         ### There's a bug here. Some blobs are not correctly renamed.
-        m1 = ccl2d(data,data_threshold_mnmx,graph=graph)
+        m1 = ccl2d(data,data_threshold_mnmx,graph=graph
+                   ,thresh_inverse=thresh_inverse
+                   ,global_latlon_grid = self.global_latlon_grid
+                   ,norm_data=norm_data
+                   ,perform_threshold=perform_threshold)
+
         # If m1 has structures, then the min label # is 1. A label of 0 is no structure.
         # We need m1's labels to be distinct, so we need to add the max label of all the m0s.
         # Because if the current m0 has no structure, then it won't keep track of the max label.
@@ -555,10 +603,11 @@ class ccl_marker_stack(object):
             m0 = self.m_results[-1][0]
             if self.marker_base <= np.amax(m0): # Update max label if needed.
                 self.marker_base = np.amax(m0)
+            # print(100)
             m0_new,m1_new,m0_eol,translation01,translation11\
-                = ccl_relabel2(m0,m1,marker_base=self.marker_base)
+                = ccl_relabel2(m0,m1,marker_base=self.marker_base,global_latlon_grid=self.global_latlon_grid)
+            # print(200)
             self.m_results.append([m1_new[:,:],translation01[:]])
-
         return (m0_new,m1_new,m0_eol,translation01)
     
     def make_labels_from(self,data_slices,data_threshold_mnmx,graph=False):
@@ -659,8 +708,8 @@ def load_a_stack(fname):
     f_handle.close()
     return seg
 
-def make_a_stack(d,thresh_mnmx):
-    ccl_stack = ccl_marker_stack()
+def make_a_stack(d,thresh_mnmx,global_latlon_grid=True):
+    ccl_stack = ccl_marker_stack(global_latlon_grid = global_latlon_grid)
     ccl_stack.make_labels_from(d,thresh_mnmx)
     return ccl_stack
 
@@ -675,7 +724,8 @@ def make_translations(i_if,stack_seg0,stack_seg1):
     
     m0n,m1n,m0_eol,trans01,trans11 = ccl_relabel2(m0
                                                   ,m1
-                                                  ,marker_base = stack_seg0.ids_max())
+                                                  ,marker_base = stack_seg0.ids_max()
+                                                  ,global_latlon_grid = stack_seg0.global_latlon_grid)
     return (trans01,trans11)
 
 def apply_interface_translation0(xab,ccl_stack):
@@ -696,12 +746,13 @@ def apply_translations(translations,ccl_stack):
     return ccl_stack
 
 class ccl_dask(object):
-    def __init__(self):
+    def __init__(self,global_latlon_grid=True):
         self.client = Client()
         self.ccl_stacks           = []
         self.ccl_stacks_relabeled = []
         self.data_segs  = []
         self.nseg       = 0
+        self.global_latlon_grid = global_latlon_grid
 
     def load_data_segments(self,file_list):
         self.nseg = len(file_list)
@@ -712,8 +763,10 @@ class ccl_dask(object):
         self.thresh_mnmx = thresh_mnmx
         for i in range(self.nseg):
             self.ccl_stacks.append(self.client.submit(make_a_stack\
-                                                 ,self.data_segs[i]\
-                                                 ,self.thresh_mnmx))
+                                                      ,self.data_segs[i]\
+                                                      ,self.thresh_mnmx\
+                                                      ,self.global_latlon_grid))
+
     def shift_labels(self):
         self.ccl_stacks_relabeled = [self.ccl_stacks[0]]
         for i_interface in range(self.nseg-1):
@@ -774,18 +827,18 @@ class ccl_dask(object):
                         done = i0 > len(x01)-1
             # if len(new_interface_translations) > 0:
             self.global_translations.append(list(new_interface_translations))
-            # print '080 global_translations: ',global_translations
+            # print( '080 global_translations: ',global_translations )
 
-        # print '099 len ccl_stacks_a = ',len(ccl_stacks_a)
-        # print '100 global_translations: ',global_translations
+        # print( '099 len ccl_stacks_a = ',len(ccl_stacks_a) )
+        # print( '100 global_translations: ',global_translations )
         
         self.global_translations.reverse()
         ccl_stacks_a.append(ccl_stack_last)
         ccl_stacks_a.reverse()
         
-        # print '110 len(ccl_stacks_a) =       ',len(ccl_stacks_a)
-        # print '110 global_translations:      ',global_translations
-        # print '110 len(global_translations): ',len(global_translations)
+        # print( '110 len(ccl_stacks_a) =       ',len(ccl_stacks_a) )
+        # print( '110 global_translations:      ',global_translations )
+        # print( '110 len(global_translations): ',len(global_translations) )
 
         # Apply the translations globally
         self.ccl_stacks_b = []
@@ -800,9 +853,9 @@ class ccl_dask(object):
             self.ccl_results.append(self.ccl_stacks_b[i_st].result())
         
         # for i_st in range(len(self.ccl_stacks_b)):
-        #     print 'i_st: ',i_st
-        #     print self.ccl_stacks_b[i_st].result().m_results_translated
-        #     print '--'
+        #     print( 'i_st: ',i_st )
+        #     print( self.ccl_stacks_b[i_st].result().m_results_translated )
+        #     print( '--' )
             
         # # Gather results here -- order of arrival? Maybe save order information and sort after gather is done...
         # # E.g. add [iseg,future] to ccl_stacks_b instead of just the future.
@@ -912,11 +965,11 @@ class Tests(unittest.TestCase):
         if False:
             k = 0
             for i in d:
-                print '**** d of i'
-                print 'k = ',k
+                print( '**** d of i' )
+                print( 'k = ',k )
                 k += 1
-                print i
-                print '***'
+                print( i )
+                print( '***' )
         # marker_stack = ccl_marker_stack()
         thresh_mnmx = (1,2)
         markers = ccl_marker_stack().make_labels_from(d,thresh_mnmx)
@@ -924,11 +977,11 @@ class Tests(unittest.TestCase):
         if False:
             k = 0
             for i in markers:
-                print "**** marker's k"
-                print 'k = ',k
-                print i
-                # print 'delta'
-                # print i-expected_results[k]
+                print( "**** marker's k" )
+                print( 'k = ',k )
+                print( i )
+                # print( 'delta' )
+                # print( i-expected_results[k] )
                 k += 1
 
         k = 0
@@ -978,12 +1031,12 @@ class Tests(unittest.TestCase):
         marker_stack = ccl_marker_stack()
         marker_stack.make_labels_from(d,thresh_mnmx)
         for i in range(marker_stack.len()):
-            # print 'i,ages(i): ',i,'\n',marker_stack.copy_of_ages_at(i)
+            # print( 'i,ages(i): ',i,'\n',marker_stack.copy_of_ages_at(i) )
             self.assertTrue(np.allclose(expected_ages[i],marker_stack.copy_of_ages_at(i), rtol=1e-05, atol=1e-08))
 
     def test_segmented_ccl(self):
         if False:
-            print '---test segmented ccl---'
+            print( '---test segmented ccl---' )
         
         d    = []
         nseg    = 5
@@ -997,7 +1050,7 @@ class Tests(unittest.TestCase):
             d[-1][2,2] = 2
             d[-1][2,4] = 2
             # d.append( np.full(nshape,i,dtype=np.int) )
-        # print 'len(d): ',len(d)
+        # print( 'len(d): ',len(d) )
         d[-nstride-1][0,2] = 2
         d[-nstride-1][1,2] = 2
         d[-nstride][0,2] = 2
@@ -1010,9 +1063,9 @@ class Tests(unittest.TestCase):
 
         dseg = []
         for i in range(nseg):
-            # print 'i,idx: ',i,i*nstride,((i+1)*nstride)-1
+            # print( 'i,idx: ',i,i*nstride,((i+1)*nstride)-1 )
             dseg.append(d[i*nstride:(i+1)*nstride])
-        # print 'len(dseg): ',len(dseg)
+        # print( 'len(dseg): ',len(dseg) )
         
         ccl_stacks = []
         seg_markers = []
@@ -1024,8 +1077,8 @@ class Tests(unittest.TestCase):
 
 
         # for i in range(nseg):
-        #     print dseg[i]
-        #     # print ccl_stacks[i].copy_of_translated_slice_at(-1)
+        #     print( dseg[i] )
+        #     # print( ccl_stacks[i].copy_of_translated_slice_at(-1) )
 
         id_delta = []
         # for i_interface in range(nseg-1):
@@ -1047,9 +1100,9 @@ class Tests(unittest.TestCase):
             m1 = stack_seg1.copy_of_translated_slice_at(0)
 
             if False:
-                print 'i_if: ',i_interface
-                print 'm0: \n',m0
-                print 'm1: \n',m1
+                print( 'i_if: ',i_interface )
+                print( 'm0: \n',m0 )
+                print( 'm1: \n',m1 )
             
             #m0n,m1n,m0_eol,trans01 = ccl_relabel2(stack_seg0.copy_of_translated_slice_at(-1)
             #                                     ,stack_seg1.slice_at(0)
@@ -1057,7 +1110,8 @@ class Tests(unittest.TestCase):
 
             m0n,m1n,m0_eol,trans01,trans11 = ccl_relabel2(m0
                                                           ,m1
-                                                          ,marker_base = stack_seg0.ids_max())
+                                                          ,marker_base = stack_seg0.ids_max()
+                                                          ,global_latlon_grid = stack_seg0.global_latlon_grid)
             
 #### review here ####
             interface_translations01.append(trans01)
@@ -1066,11 +1120,11 @@ class Tests(unittest.TestCase):
 #### review here ####
 
             if False:
-                print 'm0n: \n',m0n
-                print 'm1n: \n',m1n
-                print 'trans01: \n',trans01
-                print 'trans11: \n',trans11
-                print '---------\n'
+                print( 'm0n: \n',m0n )
+                print( 'm1n: \n',m1n )
+                print( 'trans01: \n',trans01 )
+                print( 'trans11: \n',trans11 )
+                print( '---------\n' )
 
         #??? # Now that the interface_translation??s have been constructed, now we go through
         #??? # and reconcile the whole data set. Start at the top and go back to the bottom.
@@ -1091,12 +1145,12 @@ class Tests(unittest.TestCase):
                 x_domain = x[0]
                 if len(x_domain) > 1:                    
                     x_single = max(x_domain)
-                    # print 'x_single: ',x_single
+                    # print( 'x_single: ',x_single )
                     iseg = i_interface + 1
-                    # print 'iseg: ',iseg
+                    # print( 'iseg: ',iseg )
                     for i in x_domain:
-                        # print 'i: ',i
-                        # print 'len(ccl stacks m_results): ',len(ccl_stacks[iseg].m_results_translated)
+                        # print( 'i: ',i )
+                        # print( 'len(ccl stacks m_results): ',len(ccl_stacks[iseg].m_results_translated) )
                         for im in range(len(ccl_stacks[iseg].m_results_translated)):
                             ccl_stacks[iseg].m_results_translated[im][\
                                                                       np.where(ccl_stacks[iseg].m_results_translated[im] == i)]\
@@ -1121,7 +1175,7 @@ class Tests(unittest.TestCase):
             for x1 in x11:
                 x1_domain = max(x1[0])
                 x1_fict   = x1[1]
-                # print 'x1_fict: ',x1_fict
+                # print( 'x1_fict: ',x1_fict )
 
                 i0 = 0
                 done = not( i0 < len(x01) )
@@ -1129,11 +1183,11 @@ class Tests(unittest.TestCase):
                     x0 = x01[i0]
                     x0_domain = max(x0[0])
                     x0_fict   = x0[1]
-                    # print 'x0_fict: ',x0_fict
+                    # print( 'x0_fict: ',x0_fict )
                     if x0_fict == x1_fict:
                         if len(global_translations) > 0:
                             for old_x in global_translations[-1]:
-                                # print 'old_x,x0_domain,x1_domain: ',old_x, x0_domain, x1_domain
+                                # print( 'old_x,x0_domain,x1_domain: ',old_x, x0_domain, x1_domain )
                                 if old_x[0] == x1_domain:
                                     x1_domain = old_x[1]
                                     break
@@ -1150,7 +1204,7 @@ class Tests(unittest.TestCase):
 
         # Reverse so that the interfaces are in order.
         global_translations.reverse()
-        # print 'global_translations\n',global_translations
+        # print( 'global_translations\n',global_translations )
 
         # Apply the translations applicable to each segment, so that each is now globally reconciled.
         for i_if in range(nseg-1):
@@ -1165,26 +1219,26 @@ class Tests(unittest.TestCase):
         if False:
             print
             for iseg in range(nseg):
-                print 'iseg, id min,max: ',iseg,ccl_stacks[iseg].ids_min_nonzero(),ccl_stacks[iseg].ids_max()
+                print( 'iseg, id min,max: ',iseg,ccl_stacks[iseg].ids_min_nonzero(),ccl_stacks[iseg].ids_max() )
 
             print
             for iseg in range(nseg-1):
-                print 'iseg, id_delta: ',iseg,id_delta[iseg]
+                print( 'iseg, id_delta: ',iseg,id_delta[iseg] )
 
             print
             for iseg in range(nseg-1):
-                print 'iseg, if_tran01s: ',iseg,interface_translations01[iseg]
-                print 'iseg, if_tran11s: ',iseg,interface_translations11[iseg]
+                print( 'iseg, if_tran01s: ',iseg,interface_translations01[iseg] )
+                print( 'iseg, if_tran11s: ',iseg,interface_translations11[iseg] )
             print
 
             #print
             #for iseg in range(nseg-1):
-            #    print 'iseg, if_tran11s: ',iseg,interface_translations11[iseg]
+            #    print( 'iseg, if_tran11s: ',iseg,interface_translations11[iseg] )
             
             print
             for iseg in range(nseg):
-                print 'iseg',iseg
-                print ccl_stacks[iseg].copy_of_translated_results()
+                print( 'iseg',iseg )
+                print( ccl_stacks[iseg].copy_of_translated_results() )
             print
 
         expected_labelling = []
@@ -1207,44 +1261,45 @@ class Tests(unittest.TestCase):
             
         # k = 0
         # for i in range(nseg):
-        #     print 'i: ',i,'\n'
+        #     print( 'i: ',i,'\n' )
         #     for j in dseg[i]:
-        #         print '---'
-        #         print j
-        #         print d[k]
+        #         print( '---' )
+        #         print( j )
+        #         print( d[k] )
         #         k += 1
 
         # Notes for parallelization
         if False:
-            print 'ms.ids-mx: ',np.amax(marker_stack.ids_resolved())
+            print( 'ms.ids-mx: ',np.amax(marker_stack.ids_resolved()) )
             
             split_id = 4
-            print 'split_id: ',split_id
+            print( 'split_id: ',split_id )
             d1 = d[0:split_id]
             d2 = d[split_id:]
     
             ms1 = ccl_marker_stack()
             labels1 = ms1.make_labels_from(d1,thresh_mnmx)
-            print 'ms1: \n',ms1.copy_of_translations()
-            print 'ms1-mx: ',np.amax(ms1.ids_resolved())
-            print 'ms1-mx: ',ms1.ids_max()
-            print 'ms1: \n',ms1.copy_of_translated_slice_at(-1)
+            print( 'ms1: \n',ms1.copy_of_translations() )
+            print( 'ms1-mx: ',np.amax(ms1.ids_resolved()) )
+            print( 'ms1-mx: ',ms1.ids_max() )
+            print( 'ms1: \n',ms1.copy_of_translated_slice_at(-1) )
             
             ms2 = ccl_marker_stack()
             labels2 = ms2.make_labels_from(d2,thresh_mnmx)
-            print 'ms2: \n',ms2.copy_of_translations()
-            print 'ms2-mx: ',np.amax(ms2.ids_resolved())
-            print 'ms2: \n',ms2.copy_of_translated_slice_at(0)
+            print( 'ms2: \n',ms2.copy_of_translations() )
+            print( 'ms2-mx: ',np.amax(ms2.ids_resolved()) )
+            print( 'ms2: \n',ms2.copy_of_translated_slice_at(0) )
     
             m1n,m2n,m1eol,trans01,trans11 = ccl_relabel2(ms1.copy_of_translated_slice_at(-1)
-                                                 ,ms2.copy_of_translated_slice_at(0)
-                                                 ,marker_base = ms1.ids_max())
-            print 'trans01\n',trans01
-            print 'trans11\n',trans11
-            print 'm1n:    \n',m1n
-            print 'm2n-mx: ',np.amax(m2n)
-            print 'm2n:    \n',m2n
-            print 'ms :    \n',marker_stack.copy_of_translated_slice_at(split_id)
+                                                         ,ms2.copy_of_translated_slice_at(0)
+                                                         ,marker_base = ms1.ids_max()
+                                                         ,global_latlon_grid = ms1.global_latlon_grid)
+            print( 'trans01\n',trans01 )
+            print( 'trans11\n',trans11 )
+            print( 'm1n:    \n',m1n )
+            print( 'm2n-mx: ',np.amax(m2n) )
+            print( 'm2n:    \n',m2n )
+            print( 'ms :    \n',marker_stack.copy_of_translated_slice_at(split_id) )
     
             # Okay, for a parallel computation.
             # 1. Split the data stack at a bunch of split_id's.
@@ -1272,7 +1327,7 @@ class Tests(unittest.TestCase):
             d[-1][2,2] = 2
             d[-1][2,4] = 2
             # d.append( np.full(nshape,i,dtype=np.int) )
-        # print 'len(d): ',len(d)
+        # print( 'len(d): ',len(d) )
         d[-nstride-1][0,2] = 2
         d[-nstride-1][1,2] = 2
         d[-nstride][0,2] = 2
@@ -1342,7 +1397,7 @@ class Tests(unittest.TestCase):
             d[-1][2,2] = 2
             d[-1][2,4] = 2
             # d.append( np.full(nshape,i,dtype=np.int) )
-        # print 'len(d): ',len(d)
+        # print( 'len(d): ',len(d) )
         d[-nstride-1][0,2] = 2
         d[-nstride-1][1,2] = 2
         d[-nstride][0,2] = 2
@@ -1407,7 +1462,7 @@ class Tests(unittest.TestCase):
             # Note i_interface is like -1 below.
             ccl_stacks_z.append(client.submit(shift_labels,ccl_stacks_z[i_interface],ccl_stacks[i_interface+1]))
 
-        # print 'sl-000 len(ccl_stacks_z) = ',len(ccl_stacks_z)
+        # print( 'sl-000 len(ccl_stacks_z) = ',len(ccl_stacks_z) )
         
         def make_translations(i_if,stack_seg0,stack_seg1):
             m0 = stack_seg0.copy_of_translated_slice_at(-1)
@@ -1415,12 +1470,13 @@ class Tests(unittest.TestCase):
             
             m0n,m1n,m0_eol,trans01,trans11 = ccl_relabel2(m0
                                                           ,m1
-                                                          ,marker_base = stack_seg0.ids_max())
+                                                          ,marker_base = stack_seg0.ids_max()
+                                                          ,global_latlon_grid = stack_seg0.global_latlon_grid)
             return (trans01,trans11)
             
         interface_translationsXX = []
         for i_interface in range(nseg-1):
-            # print 'make_trans i_interface = ',i_interface
+            # print( 'make_trans i_interface = ',i_interface )
             interface_translationsXX.append(client.submit(make_translations\
                                                           ,i_interface\
                                                           ,ccl_stacks_z[i_interface]\
@@ -1451,10 +1507,10 @@ class Tests(unittest.TestCase):
         global_translations = []
         ccl_stack_last = ccl_stacks_z[-1] # a future
         
-        # print '000 nseg:               ',nseg
-        # print '000 range(nseg-2,-1-1): ',range(nseg-2,-1,-1)
+        # print( '000 nseg:               ',nseg )
+        # print( '000 range(nseg-2,-1-1): ',range(nseg-2,-1,-1) )
         for i_interface in range(nseg-2,-1,-1):
-            # print '010 i_interface: ',i_interface
+            # print( '010 i_interface: ',i_interface )
             new_interface_translations = []
             ccl_stack1 = ccl_stack_last # a future
             ccl_stack0 = ccl_stacks_z[i_interface] # a future
@@ -1492,18 +1548,18 @@ class Tests(unittest.TestCase):
                         done = i0 > len(x01)-1
             # if len(new_interface_translations) > 0:
             global_translations.append(list(new_interface_translations))
-            # print '080 global_translations: ',global_translations
+            # print( '080 global_translations: ',global_translations )
 
-        # print '099 len ccl_stacks_a = ',len(ccl_stacks_a)
-        # print '100 global_translations: ',global_translations
+        # print( '099 len ccl_stacks_a = ',len(ccl_stacks_a) )
+        # print( '100 global_translations: ',global_translations )
         
         global_translations.reverse()
         ccl_stacks_a.append(ccl_stack_last)
         ccl_stacks_a.reverse()
         
-        # print '110 len(ccl_stacks_a) =       ',len(ccl_stacks_a)
-        # print '110 global_translations:      ',global_translations
-        # print '110 len(global_translations): ',len(global_translations)
+        # print( '110 len(ccl_stacks_a) =       ',len(ccl_stacks_a) )
+        # print( '110 global_translations:      ',global_translations )
+        # print( '110 len(global_translations): ',len(global_translations) )
 
         # Apply the translations globally
         ccl_stacks_b = []
@@ -1515,12 +1571,12 @@ class Tests(unittest.TestCase):
         ccl_stacks_b.append(ccl_stacks_a[-1])
         
         if False:
-            print 'ccl_stacks_b, len = ',len(ccl_stacks_b)
+            print( 'ccl_stacks_b, len = ',len(ccl_stacks_b) )
         if False:
             for i_st in range(len(ccl_stacks_b)):
-                print 'i_st: ',i_st
-                print ccl_stacks_b[i_st].result().m_results_translated
-                print '--'
+                print( 'i_st: ',i_st )
+                print( ccl_stacks_b[i_st].result().m_results_translated )
+                print( '--' )
         
         for iseg in range(nseg):
             for islice in range(nstride):
@@ -1532,7 +1588,7 @@ class Tests(unittest.TestCase):
             os.remove(fname)
             
         client.close()
-            
+
     def test_relabel2(self):
         if True:
             verbose = False
@@ -1562,28 +1618,28 @@ class Tests(unittest.TestCase):
             d2[4,5] = 2
 
             if verbose:
-                print '***'
+                print( '***' )
             m0 = ccl2d(d0,(1,2))
             m0_orig = m0.copy()
             if verbose:
-                print 'm0:     \n',m0
+                print( 'm0:     \n',m0 )
             m1 = ccl2d(d1,(1,2))
             if verbose:
-                print 'm1:     \n',m1
-                print '***'
+                print( 'm1:     \n',m1 )
+                print( '***' )
             m0_new,m1_new,m0_eol,translation01,translation11\
                 = ccl_relabel2(m0,m1)
             translation01_0 = translation01
             m0_new_0 = m0_new
             if verbose:
-                print '***'
-                print 'm0:     \n',m0
-                print 'm1:     \n',m1
-                print 'm0_new: \n',m0_new
-                print 'm1_new: \n',m1_new
-                print 'm0_eol: \n',m0_eol
-                print 'xl_   : \n',translation01
-                print '******'
+                print( '***' )
+                print( 'm0:     \n',m0 )
+                print( 'm1:     \n',m1 )
+                print( 'm0_new: \n',m0_new )
+                print( 'm1_new: \n',m1_new )
+                print( 'm0_eol: \n',m0_eol )
+                print( 'xl_   : \n',translation01 )
+                print( '******' )
 
             self.assertTrue(\
                             np.allclose(\
@@ -1596,33 +1652,33 @@ class Tests(unittest.TestCase):
                                                    [0, 0, 0, 0, 0, 2]])))
 
             if verbose:
-                print '***'
+                print( '***' )
             m0 = m1_new.copy()
             if verbose:
-                print 'm0:     \n',m0
+                print( 'm0:     \n',m0 )
             m1 = ccl2d(d2,(1,2)); # m1[np.where(m1 > 0)] += marker_base; marker_base = np.max(m1)
             if verbose:
-                print 'm1:     \n',m1
-                print '***'
+                print( 'm1:     \n',m1 )
+                print( '***' )
             m0_new,m1_new,m0_eol,translation01,translation11\
                 = ccl_relabel2(m0,m1)
             translation01_1 = translation01
             if verbose:
-                print 'm0:     \n',m0
-                print 'm1:     \n',m1
-                print 'm0_new: \n',m0_new
-                print 'm1_new: \n',m1_new
-                print 'm0_eol: \n',m0_eol
-                print 'xl_01 : \n',translation01
-                print 'xl_11 : \n',translation11
-                print '******'
+                print( 'm0:     \n',m0 )
+                print( 'm1:     \n',m1 )
+                print( 'm0_new: \n',m0_new )
+                print( 'm1_new: \n',m1_new )
+                print( 'm0_eol: \n',m0_eol )
+                print( 'xl_01 : \n',translation01 )
+                print( 'xl_11 : \n',translation11 )
+                print( '******' )
             xl_012 = ccl_compose_translations(translation01_0,translation01_1)
             if verbose:
-                print 'xl_012   : \n',xl_012
+                print( 'xl_012   : \n',xl_012 )
             m0_orig_x = ccl_backsub(m0_orig,xl_012)
             if verbose:
-                print 'm0_orig_x:     \n',m0_orig_x
-                print '******'
+                print( 'm0_orig_x:     \n',m0_orig_x )
+                print( '******' )
 
             self.assertTrue(np.allclose(\
                                         np.array(\
@@ -1632,6 +1688,24 @@ class Tests(unittest.TestCase):
                                                    [0, 0, 4, 0, 0, 0],
                                                    [0, 0, 4, 0, 0, 0]])
                                         ,m0_orig_x))
+
+# https://stackoverflow.com/questions/46441893/connected-component-labeling-in-python
+# For fun viz.
+def imshow_components(labels):
+    # Map component labels to hue val
+    label_hue = np.uint8(179*labels/np.max(labels))
+    blank_ch = 255*np.ones_like(label_hue)
+    labeled_img = cv2.merge([label_hue, blank_ch, blank_ch])
+
+    # cvt to BGR for display
+    labeled_img = cv2.cvtColor(labeled_img, cv2.COLOR_HSV2BGR)
+
+    # set bg label to black
+    labeled_img[label_hue==0] = 0
+
+    # cv2.imshow('labeled.png', labeled_img); cv2.waitKey()
+    return labeled_img
+
             
 if __name__ == '__main__':
 
