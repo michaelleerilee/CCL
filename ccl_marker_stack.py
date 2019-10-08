@@ -218,7 +218,7 @@ def ccl_relabel2(m0,m1,verbose=False,marker_base=None,global_latlon_grid=True):
     # r0 = id_00_01[i,1]
 
     sw_timer.stamp("cms:relabel2 translation tables A")
-
+    ### hot spot
     markers_unique = np.unique(markers01)
 
     rs=[]
@@ -231,7 +231,7 @@ def ccl_relabel2(m0,m1,verbose=False,marker_base=None,global_latlon_grid=True):
         while ir < len(id_00_01):
             if (r0 == id_00_01[ir][1]):
                 if id_00_01[ir][0] not in r:
-                    r.append(id_00_01[ir][0])                
+                    r.append(id_00_01[ir][0])
             ir += 1
         it = 0
         while it < len(id_01_01):
@@ -349,7 +349,8 @@ def ccl_relabel2(m0,m1,verbose=False,marker_base=None,global_latlon_grid=True):
 
     marker_base = marker_current
 
-    sw_timer.stamp("cms:relabel2 translation tables D")
+    sw_timer.stamp("cms:relabel2 translation tables D0")
+    ### Another hot spot
     
     # print( 'equivalence sets k= ',len(marker_fork_equivalence_sets) )
 
@@ -360,12 +361,16 @@ def ccl_relabel2(m0,m1,verbose=False,marker_base=None,global_latlon_grid=True):
             k = k + 1
     # print( 'independent sets in m1 k= ',k )
 
+    sw_timer.stamp("cms:relabel2 translation tables D1")
+
     k = 0
     for i in np.unique(m0):
         if i not in relabeled4:
             m0_new[np.where(m0 == i)] = i
             k = k + 1
     # print( 'independent sets in m0 k= ',k )
+
+    sw_timer.stamp("cms:relabel2 translation tables D2")
     
     m0_new_unique = np.unique(m0_new)
     # print( 'unique(m0_new): ',m0_new_unique )
@@ -373,12 +378,19 @@ def ccl_relabel2(m0,m1,verbose=False,marker_base=None,global_latlon_grid=True):
     m1_new_unique = np.unique(m1_new)
     # print( 'unique(m1_new): ',m1_new_unique )
 
+    sw_timer.stamp("cms:relabel2 translation tables D3a")
+
     # Compress labels above marker_base_0
     old_labels_to_replace            = m1_new_unique[np.where(m1_new_unique > marker_base_0)]
+
+    sw_timer.stamp("cms:relabel2 translation tables D3b")
+
     # new_compressed_labels = np.arange(len(new_lables))
     for i in range(len(old_labels_to_replace)):
         m0_new[np.where(m0_new == old_labels_to_replace[i])] = i + marker_base_0 + 1
         m1_new[np.where(m1_new == old_labels_to_replace[i])] = i + marker_base_0 + 1
+
+    sw_timer.stamp("cms:relabel2 translation tables D4")
 
     if len(old_labels_to_replace) > 0:
         for j in range(len(translation01)):
@@ -390,6 +402,8 @@ def ccl_relabel2(m0,m1,verbose=False,marker_base=None,global_latlon_grid=True):
             else:
                 labels1 = labels0
             translation01[j][1] = labels1
+
+    sw_timer.stamp("cms:relabel2 translation tables D5")
         
     marker_base = np.amax(m1_new)
 
@@ -398,6 +412,8 @@ def ccl_relabel2(m0,m1,verbose=False,marker_base=None,global_latlon_grid=True):
     
     m1_new_unique = np.unique(m1_new)
     # print( 'unique(m1_new): ',m1_new_unique )
+
+    sw_timer.stamp("cms:relabel2 translation tables D6")
     
     m0_eol = []
     for i in range(1,len(m0_new_unique)):
