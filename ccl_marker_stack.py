@@ -42,7 +42,7 @@ import numpy as np
 import os
 from ccl2d import ccl2d
 
-from stopwatch import sw_timer
+from geodata.stopwatch import sw_timer
 
 def ccl_backsub(m,translations):
     "Apply the translations to the markers m."
@@ -164,6 +164,7 @@ def ccl_relabel2(m0,m1,verbose=False,marker_base=None,global_latlon_grid=True):
 
     # cv2.imshow('markers sum',markers_sum); cv2.waitKey(0); cv2.destroyAllWindows()
     
+# Find where there are connections between m0 and m1.
     ret, thresh = cv2.threshold(markers_sum\
                                 ,0,np.max(markers_sum)\
                                 ,cv2.THRESH_BINARY)
@@ -174,16 +175,27 @@ def ccl_relabel2(m0,m1,verbose=False,marker_base=None,global_latlon_grid=True):
 
     # print(1000)
     # ret, markers01 = cv2.connectedComponents(thresh)
+
+# Label those connections.
     markers01 = ccl2d(thresh,(254,255)
                       ,global_latlon_grid = global_latlon_grid
                   )
     # print(2000)
     # cv2.imshow('markers01',markers01.astype(np.float)/np.amax(markers01)); cv2.waitKey(0); cv2.destroyAllWindows()
 
-    idx_00_01 = np.where((thresh == 255) & (m0 != 0))
+###########################################################################
+    sw_timer.stamp("cms:relabel2 translation tables Z0")
+
+# Identify where m0 is connected with thresh.
+    idx_00_01 = np.where((thresh == 255) & (m0 != 0)) # 
     # print( 'idx_00_01: ',idx_00_01 )
 
+###########################################################################
+    sw_timer.stamp("cms:relabel2 translation tables Z1")
+
+# Determine mapping from m's labels to markers' labels.
     def map_slice_to_combined(m,markers,thresh):
+        "Determine how elements of m map to elements of markers."
         idx = np.where((thresh == 255) & (m != 0))
         id  = []
         for ij in range(len(idx[0])):
@@ -194,8 +206,13 @@ def ccl_relabel2(m0,m1,verbose=False,marker_base=None,global_latlon_grid=True):
             id.append(rs)
         return id
 
+###########################################################################
+    sw_timer.stamp("cms:relabel2 translation tables Z2")
+
     id_00_01 = map_slice_to_combined(m0,markers01,thresh)
     id_01_01 = map_slice_to_combined(m1,markers01,thresh)
+
+    sw_timer.stamp("cms:relabel2 translation tables Z3")
 
     # print(3000)
     
@@ -217,20 +234,37 @@ def ccl_relabel2(m0,m1,verbose=False,marker_base=None,global_latlon_grid=True):
 
     # r0 = id_00_01[i,1]
 
+###########################################################################
     sw_timer.stamp("cms:relabel2 translation tables A")
     ### hot spot
     markers_unique = np.unique(markers01)
 
+    # rs contains 'maps' of form [set(r),set(s)]
+    # id_00_01 is where hits in markers_sum has a corresponding cell in m0
+    # So it's where m0 overlaps with the new hits. Now we need to 
+    # set up equivalence classes between the two layers.
+
+    # id means "identify" as in "identify a as b."
+    # slice is zero or one
+    # id_00_01 -> [rs0,rs1,rs2,...]
+    # rs -> [r,s], an equivalence class equating labels from two slices
+    # r is a label from "m"
+    # s is a set of markers from "markers"
+    # 
+    # At this point, id_00_01 and id_01_01 map from their slices to the common one.
+    # We need to combine these into a single rs containing the many-to-many
+    # equivalence sets, e.g. rs -> [ [r0,s0], ... ]
+
     rs=[]
     i = 0
-    while i < len(markers_unique):
+    while i < len(markers_unique): # go through markers01
         r = []
         s = []
-        r0 = markers_unique[i]
+        r0 = markers_unique[i] # r0 in markers01
         ir = 0
-        while ir < len(id_00_01):
-            if (r0 == id_00_01[ir][1]):
-                if id_00_01[ir][0] not in r:
+        while ir < len(id_00_01): # go through mapping
+            if (r0 == id_00_01[ir][1]): # is r0 in the next slice at ir?
+                if id_00_01[ir][0] not in r: # if it is, and it's point is not in our range at ir, add it.
                     r.append(id_00_01[ir][0])
             ir += 1
         it = 0
@@ -243,6 +277,7 @@ def ccl_relabel2(m0,m1,verbose=False,marker_base=None,global_latlon_grid=True):
             rs.append([set(r),set(s)])
         i += 1
 
+###########################################################################
     sw_timer.stamp("cms:relabel2 translation tables B")
 
     done = False
@@ -292,6 +327,7 @@ def ccl_relabel2(m0,m1,verbose=False,marker_base=None,global_latlon_grid=True):
 
     marker_fork_equivalence_sets = rs
 
+###########################################################################
     sw_timer.stamp("cms:relabel2 translation tables C")
                     
     # i = 0
@@ -349,6 +385,7 @@ def ccl_relabel2(m0,m1,verbose=False,marker_base=None,global_latlon_grid=True):
 
     marker_base = marker_current
 
+###########################################################################
     sw_timer.stamp("cms:relabel2 translation tables D0")
     ### Another hot spot
     
@@ -483,7 +520,7 @@ class ccl_marker_stack(object):
         self.m_ages               = {}
         self.translations         = []
         self.marker_base          = 0
-        self.global_latlon_grid   = global_latlon_grid
+        self.global_latlon_grid   = global_latlon_grid # Toggle boundary conditions.
 
 # To merge two stacks, we need to identify the mapping between the two
 # sets of labels at the interface. The labels at the bottom start
@@ -596,7 +633,9 @@ class ccl_marker_stack(object):
     def make_slice_from(self,data,data_threshold_mnmx,graph=False
                         ,thresh_inverse=False
                         ,norm_data=True
-                        ,perform_threshold=True):
+                        ,perform_threshold=True
+                        ,discard_below_pixel_area=None
+    ):
 
         ### There's a bug here. Some blobs are not correctly renamed.
         m1 = ccl2d(data,data_threshold_mnmx,graph=graph
@@ -604,6 +643,55 @@ class ccl_marker_stack(object):
                    ,global_latlon_grid = self.global_latlon_grid
                    ,norm_data=norm_data
                    ,perform_threshold=perform_threshold)
+
+        ### This is where you can put a filter to reduce the number of ccl-regions to analyze.
+        if discard_below_pixel_area is not None:
+            # print('')
+            # print('discard ',discard_below_pixel_area)
+            sw_timer.stamp('cms:make_slice_from:discard_below_pixel_area:start')
+            m1_flat = m1.flatten()
+            m1_unique,m1u_indices,m1u_inverse,m1u_counts\
+                = np.unique(m1_flat
+                            ,return_index   = True
+                            ,return_inverse = True
+                            ,return_counts  = True
+                        )
+            # print('m1         ',np.amin(m1),np.amax(m1),m1.shape)
+            # print('m1u        ',np.amin(m1_unique),np.amax(m1_unique),m1_unique.shape)
+            # print('m1u counts ',np.amin(m1u_counts),np.amax(m1u_counts),m1u_counts.shape)
+            idx_zero = np.where( m1u_counts < discard_below_pixel_area)[0]
+            # print('idx_zero ',idx_zero)
+            # print('idx_zero   ',np.amin(idx_zero),np.amax(idx_zero),len(idx_zero))
+            m1_unique[idx_zero] = 0
+            idx_keep = np.where(m1u_counts >= discard_below_pixel_area)[0]
+            # print('idx_keep   ',np.amin(idx_keep),np.amax(idx_keep),len(idx_keep))
+            m1_unique[idx_keep] = np.arange(len(idx_keep))
+            m1_flat = m1_unique[m1u_inverse]
+            m1 = m1_flat.reshape(m1.shape)
+            # print('m1 shape           ',m1.shape)
+            # print('make_slice uniq    ',m1_unique.shape)
+            # print('make_slice keeping ',len(idx_keep))
+            sw_timer.stamp('cms:make_slice_from:discard_below_pixel_area:end')
+
+            # sw_timer.stamp('cms:make_slice_from:discard_below_pixel_area:start')
+            # m1_flat         = m1.flatten()
+            # m1_unique       = np.unique(m1_flat)
+            # print('m1_unique.size: ',m1_unique.size)
+            # m1_unique_count = np.zeros(m1_unique.shape,dtype=np.int64)
+            # for i in range(m1_unique_count.size):
+            #     m1_unique_count[i] = np.count_nonzero(m1_flat == m1_unique[i])
+            # idx_remove = np.where(m1_unique_count <  discard_below_pixel_area)
+            # idx_keep   = np.where(m1_unique_count >= discard_below_pixel_area)
+            # m_remove = m1_unique[idx_remove]
+            # print('m_remove.size: ',m_remove.size)
+            # for imr in m_remove:
+            #     m1[np.where(m1 == imr)] = 0
+            # m_keep = m1_unique[idx_keep]
+            # print('m_keep.size: ',m_keep.size)
+            # for i in range(m_keep.size):
+            #     if i != m_keep[i]:
+            #         m1[np.where(m1 == m_keep[i])] = i
+            # sw_timer.stamp('cms:make_slice_from:discard_below_pixel_area:end')
 
         # If m1 has structures, then the min label # is 1. A label of 0 is no structure.
         # We need m1's labels to be distinct, so we need to add the max label of all the m0s.
