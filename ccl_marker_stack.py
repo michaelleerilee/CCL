@@ -196,6 +196,8 @@ def ccl_relabel2(m0,m1,verbose=False,marker_base=None,global_latlon_grid=True):
 # Determine mapping from m's labels to markers' labels.
     def map_slice_to_combined(m,markers,thresh):
         "Determine how elements of m map to elements of markers."
+        # thresh == 255 => there's a match
+        # m != 0 => the point actually exists in the first layer
         idx = np.where((thresh == 255) & (m != 0))
         id  = []
         for ij in range(len(idx[0])):
@@ -255,6 +257,10 @@ def ccl_relabel2(m0,m1,verbose=False,marker_base=None,global_latlon_grid=True):
     # We need to combine these into a single rs containing the many-to-many
     # equivalence sets, e.g. rs -> [ [r0,s0], ... ]
 
+    # 
+
+    # Try sorted containers... Dicts might be a better way...
+
     rs=[]
     i = 0
     while i < len(markers_unique): # go through markers01
@@ -277,9 +283,13 @@ def ccl_relabel2(m0,m1,verbose=False,marker_base=None,global_latlon_grid=True):
             rs.append([set(r),set(s)])
         i += 1
 
+###??? zip-zip?
+
 ###########################################################################
     sw_timer.stamp("cms:relabel2 translation tables B")
 
+###########################################################################
+# Handle forking, i.e. one region becoming two.
     done = False
     while not done:
         # print( 'rs: ',rs )
