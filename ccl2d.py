@@ -43,10 +43,12 @@ def ccl2d(data_in,thresh,verbose=False,graph=False,thresh_inverse=False,global_l
         cv2.imshow('data_in',data_in); cv2.waitKey(0); cv2.destroyAllWindows()
 
     if perform_threshold:
+        sw_timer.stamp('ccl2d perform_threshold start')
         if not thresh_inverse:
             ret, thresh = cv2.threshold(data, d_trigger, d_out, cv2.THRESH_BINARY)
         else:
             ret, thresh = cv2.threshold(data, d_trigger, d_out, cv2.THRESH_BINARY_INV)
+        sw_timer.stamp('ccl2d perform_threshold end')
 
     if verbose:
         print('thresh-ret:            ',ret)
@@ -82,6 +84,7 @@ def ccl2d(data_in,thresh,verbose=False,graph=False,thresh_inverse=False,global_l
 
     if not global_latlon_grid:
         sw_timer.stamp('ccl2d no-grid early return')
+        sw_timer.stamp('ccl2d end')
         return markers
 
     # The rest of the routine handles the poles and longitudinal periodicity.

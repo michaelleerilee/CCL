@@ -730,6 +730,7 @@ class ccl_marker_stack(object):
         return self.resolve_labels_across_stack()
     
     def resolve_labels_across_stack(self):
+        sw_timer.stamp('cms:resolve_labels_across_stack start')
         m                    = self.m_results[-1][0].copy()
         m_unique             = np.unique(m[np.where(m>0)])
         for i in m_unique:
@@ -751,6 +752,7 @@ class ccl_marker_stack(object):
             self.m_results_translated.append(m0n.copy())
         self.m_results_translated.reverse()
         self.translations.reverse()
+        sw_timer.stamp('cms:resolve_labels_across_stack end')
         return self.m_results_translated
 
     def apply_translations(self,translations_in):
