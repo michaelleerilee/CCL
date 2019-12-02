@@ -62,10 +62,12 @@ def ccl2d(data_in,thresh,verbose=False,graph=False,thresh_inverse=False,global_l
     if False:
         cv2.imshow('thresh',thresh); cv2.waitKey(0); cv2.destroyAllWindows()
 
+    sw_timer.stamp('ccl2d cv2.connectedComponents start')
     if perform_threshold:
         ret, markers = cv2.connectedComponents(thresh)
     else:
         ret, markers = cv2.connectedComponents(data_in)
+    sw_timer.stamp('ccl2d cv2.connectedComponents end')
     
     if verbose:
         print('markers-ret: ',ret)

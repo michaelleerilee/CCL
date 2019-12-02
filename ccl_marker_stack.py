@@ -165,9 +165,11 @@ def ccl_relabel2(m0,m1,verbose=False,marker_base=None,global_latlon_grid=True):
     # cv2.imshow('markers sum',markers_sum); cv2.waitKey(0); cv2.destroyAllWindows()
     
 # Find where there are connections between m0 and m1.
+    sw_timer.stamp("cms:relabel2 cv2.threshold calc start")
     ret, thresh = cv2.threshold(markers_sum\
                                 ,0,np.max(markers_sum)\
                                 ,cv2.THRESH_BINARY)
+    sw_timer.stamp("cms:relabel2 cv2.threshold calc end")
 
 #                                ,1,np.max(markers_sum)\
 
