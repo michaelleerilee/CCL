@@ -48,7 +48,7 @@ except ImportError:
     from stopwatch import sw_timer
 
 from sortedcontainers import SortedDict, SortedList, SortedSet
-from numba import jit
+# from numba import jit
 
 import itertools
 
