@@ -10,7 +10,11 @@ import unittest
 
 import cv2
 import numpy as np
-from geodata.stopwatch import sw_timer
+
+try:
+    from geodata.stopwatch import sw_timer
+except ImportError:
+    from stopwatch import sw_timer
 
 def ccl2d(data_in,thresh,verbose=False,graph=False,thresh_inverse=False,global_latlon_grid = True,norm_data=True,perform_threshold=True):
 
