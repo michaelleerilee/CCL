@@ -334,6 +334,9 @@ def ccl_relabel2(m0,m1,verbose=False,marker_base=None,global_latlon_grid=True,cl
     # print(1000)
     # ret, markers01 = cv2.connectedComponents(thresh)
 
+###
+### A SECOND CCL2D - PART OF TRACKING - RELABEL2
+###
 # Label those connections.
     markers01 = ccl2d(thresh,(254,255)
                       ,global_latlon_grid = global_latlon_grid
@@ -834,20 +837,37 @@ class ccl_marker_stack(object):
     # labels so there are no gaps in the labels used in the new slice. A
     # list of translations between adjacent slices is maintained.
     #
-    def make_slice_from(self,data,data_threshold_mnmx,graph=False
+    def make_slice_from(self
+                        ,data = None
+                        ,data_threshold_mnmx = None
+                        ,graph=False
                         ,thresh_inverse=False
                         ,norm_data=True
                         ,perform_threshold=True
                         ,discard_below_pixel_area=None
                         ,dask_client=None
+                        ,markers = None
     ):
 
-        ### There's a bug here. Some blobs are not correctly renamed.
-        m1 = ccl2d(data,data_threshold_mnmx,graph=graph
-                   ,thresh_inverse=thresh_inverse
-                   ,global_latlon_grid = self.global_latlon_grid
-                   ,norm_data=norm_data
-                   ,perform_threshold=perform_threshold)
+        ### There's a bug here. Some blobs are not correctly renamed. - Maybe not operative anymore.
+
+        if markers is None:
+            ###
+            ### FIRST CCL2D
+            ### 
+            m1 = ccl2d(data,data_threshold_mnmx,graph=graph
+                       ,thresh_inverse=thresh_inverse
+                       ,global_latlon_grid = self.global_latlon_grid
+                       ,norm_data=norm_data
+                       ,perform_threshold=perform_threshold)
+            ###
+            ###
+            ###
+        else:
+            ###
+            ### USE WHATEVER IS PASSED IN, DON'T WORRY ABOUT BOUNDARY CONDITIONS
+            ###
+            m1 = markers
 
         ### This is where you can put a filter to reduce the number of ccl-regions to analyze.
         if discard_below_pixel_area is not None:
@@ -913,11 +933,19 @@ class ccl_marker_stack(object):
             if self.marker_base <= np.amax(m0): # Update max label if needed.
                 self.marker_base = np.amax(m0)
             # print(100)
+            
+            ###
+            ### HERE'S THE BIG RELABEL2 THAT COSTS SO MUCH AND HAS THE 2ND CCL2D CALL
+            ###
             m0_new,m1_new,m0_eol,translation01,translation11\
                 = ccl_relabel2(m0,m1,marker_base=self.marker_base,global_latlon_grid=self.global_latlon_grid,client=dask_client)
+            ###
+            ###
+            ###
             # print(200)
             self.m_results.append([m1_new[:,:],translation01[:]])
         return (m0_new,m1_new,m0_eol,translation01)
+    # END def make_slice_from
     
     def make_labels_from(self,data_slices,data_threshold_mnmx,graph=False):
         for d in data_slices:

@@ -67,10 +67,16 @@ def ccl2d(data_in,thresh,verbose=False,graph=False,thresh_inverse=False,global_l
         cv2.imshow('thresh',thresh); cv2.waitKey(0); cv2.destroyAllWindows()
 
     sw_timer.stamp('ccl2d cv2.connectedComponents start')
+    ###
+    ### HERE ARE THE CONNECTED COMPONENTS CCL2D CALLS.
+    ###
     if perform_threshold:
         ret, markers = cv2.connectedComponents(thresh)
     else:
         ret, markers = cv2.connectedComponents(data_in)
+    ###
+    ###
+    ###
     sw_timer.stamp('ccl2d cv2.connectedComponents end')
     
     if verbose:
@@ -92,8 +98,13 @@ def ccl2d(data_in,thresh,verbose=False,graph=False,thresh_inverse=False,global_l
         sw_timer.stamp('ccl2d no-grid early return')
         sw_timer.stamp('ccl2d end')
         return markers
-
-    # The rest of the routine handles the poles and longitudinal periodicity.
+    ###
+    ### RETURNED IF NOT A LON-LAT GRID
+    ###
+    ###########################################################################
+    ###
+    ### The rest of the routine handles the poles and longitudinal periodicity.
+    ###
 
     # Say the elements touching the pole are the same cell
     bot_unique = np.unique(markers[  0,:])
@@ -179,7 +190,6 @@ def ccl2d(data_in,thresh,verbose=False,graph=False,thresh_inverse=False,global_l
     markers_unique_1=np.unique(markers)
     if verbose:
         print( '120: ',markers_unique_1 )
-
 
     if graph:
         data2 = np.zeros(markers.shape,dtype=np.uint8)
