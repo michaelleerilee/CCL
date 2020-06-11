@@ -628,6 +628,13 @@ def ccl_relabel2(m0,m1,verbose=False,marker_base=None,global_latlon_grid=True,cl
     for i in range(len(old_labels_to_replace)):
         m0_new[np.where(m0_new == old_labels_to_replace[i])] = i + marker_base_0 + 1
         m1_new[np.where(m1_new == old_labels_to_replace[i])] = i + marker_base_0 + 1
+    #
+    # m1_new complete here
+    #
+    ###########################################################################
+    #
+    # Adjust translation table to reflect new labels.
+    #
 
     sw_timer.stamp("cms:relabel2 translation tables D4")
 
@@ -714,6 +721,10 @@ def ccl_relabel2(m0,m1,verbose=False,marker_base=None,global_latlon_grid=True,cl
 
     sw_timer.stamp("cms:relabel2 end")
     return (m0_new,m1_new,m0_eol,translation01,translation11)
+#
+# END CCL_RELABEL2
+#
+###########################################################################
 
 class ccl_marker_stack(object):
     def __init__(self,global_latlon_grid = True,options=None):
@@ -774,6 +785,7 @@ class ccl_marker_stack(object):
                 for j in range(len(self.m_results[i][1])):
                     # print( '---\ni: ',i )
                     # print( 'shift_labels: ',self.m_results[i],'the marker,translation pair from a set of ids to the current id' )
+                    # print( 'shift_labels: ',self.m_results[i][0],'the marker component' )
                     # print( 'shift_labels: ',self.m_results[i][1], 'the translations component, a list of set(l0),[l1] pairs' )
                     # print( 'shift_labels: ',self.m_results[i][1][0], 'the 0th translation' )
                     # for x in self.m_results[i][1]:
@@ -954,8 +966,8 @@ class ccl_marker_stack(object):
     
     def resolve_labels_across_stack(self):
         sw_timer.stamp('cms:resolve_labels_across_stack start')
-        m                    = self.m_results[-1][0].copy()
-        m_unique             = np.unique(m[np.where(m>0)])
+        m                    = self.m_results[-1][0].copy() # The last slice of markers
+        m_unique             = np.unique(m[np.where(m>0)])  # What are the unique labels in marker slice m?
         for i in m_unique:
             self.m_ages[i] = 1
         self.m_results_translated = [m]
