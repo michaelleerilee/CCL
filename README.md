@@ -42,10 +42,17 @@ conda install -c conda-forge matplotlib
 conda install -c conda-forge dask['distributed']
 conda install -c conda-forge ipympl
 conda install -c conda-forge nodejs
+conda install -c conda-forge proj4 
+conda install -c conda-forge basemap
+conda install -c conda-forge netCDF4
+ 
+conda install -c conda-forge proj4 basemap matplotlib ipympl nodejs ipykernel dask['distributed'] pip
 
 pip install opencv-python￼
 pip install pyhdf
-
 pip install connected-components-3d
-conda install -c conda-forge proj4
-conda install -c conda-forge basemap
+conda 
+
+
+
+python -m ipykernel install --user --name=ccl
