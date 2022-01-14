@@ -16,3 +16,36 @@ where data_slices is a list of 2D numpy arrays and data_threshold_mnmx is a (mn,
 
 
 
+
+# Depencencies
+
+```bash
+pip3 install dask['distributed']
+pip3 install opencv-python
+```
+
+to run the examples:
+
+jupyter
+hdf5
+matplotlib
+
+
+## Zero-To examples
+
+```bash
+conda create --name ccl 
+conda activate ccl 
+
+conda install -c conda-forge jupyterlab
+conda install -c conda-forge matplotlib
+conda install -c conda-forge dask['distributed']
+conda install -c conda-forge ipympl
+conda install -c conda-forge nodejs
+
+pip install opencv-python￼
+pip install pyhdf
+
+pip install connected-components-3d
+conda install -c conda-forge proj4
+conda install -c conda-forge basemap

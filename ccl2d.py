@@ -16,7 +16,14 @@ try:
 except ImportError:
     from stopwatch import sw_timer
 
-def ccl2d(data_in,thresh,verbose=False,graph=False,thresh_inverse=False,global_latlon_grid = True,norm_data=True,perform_threshold=True):
+def ccl2d(data_in,
+          thresh,
+          verbose=False,
+          graph=False,
+          thresh_inverse=False,
+          global_latlon_grid = True,
+          norm_data=True,
+          perform_threshold=True):
 
     sw_timer.stamp('ccl2d start')
 
@@ -164,7 +171,7 @@ def ccl2d(data_in,thresh,verbose=False,graph=False,thresh_inverse=False,global_l
         
     id_all_uniq = []
     for i in id_all_fixed:
-        if (i not in id_all_uniq):
+        if (i not in id_all_uniq):thresh
             id_all_uniq.append(i)
     for i in range(len(id_all_uniq)):
         r = id_all_uniq[i]

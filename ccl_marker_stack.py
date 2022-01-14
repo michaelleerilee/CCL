@@ -849,17 +849,34 @@ class ccl_marker_stack(object):
     # labels so there are no gaps in the labels used in the new slice. A
     # list of translations between adjacent slices is maintained.
     #
-    def make_slice_from(self
-                        ,data = None
-                        ,data_threshold_mnmx = None
-                        ,graph=False
-                        ,thresh_inverse=False
-                        ,norm_data=True
-                        ,perform_threshold=True
-                        ,discard_below_pixel_area=None
-                        ,dask_client=None
-                        ,markers = None
-    ):
+    def make_slice_from(self,
+                        data=None,
+                        data_threshold_mnmx=None,
+                        graph=False,
+                        thresh_inverse=False,
+                        norm_data=True,
+                        perform_threshold=True,
+                        minimum_pixel_area=None,
+                        dask_client=None,
+                        markers=None):
+        
+        """ Creates a slice from an array
+    
+        
+        Paramters
+        -------------
+        data:        
+        data_threshold_mnmx:  
+            
+        graph: bool
+        thresh_inverse: bool
+        norm_data: bool
+        perform_threshold: bool
+        minimum_pixel_area: int or None
+            Discard components that are below the minimum_pixel_area given in the number of pixel. Ignored if None
+        dask_client:
+        markers:
+        """
 
         ### There's a bug here. Some blobs are not correctly renamed. - Maybe not operative anymore.
 
@@ -867,9 +884,11 @@ class ccl_marker_stack(object):
             ###
             ### FIRST CCL2D
             ### 
-            m1 = ccl2d(data,data_threshold_mnmx,graph=graph
-                       ,thresh_inverse=thresh_inverse
-                       ,global_latlon_grid = self.global_latlon_grid
+            m1 = ccl2d(data,
+                       data_threshold_mnmx,
+                       graph=graph,
+                       thresh_inverse=thresh_inverse,
+                       global_latlon_grid = self.global_latlon_grid
                        ,norm_data=norm_data
                        ,perform_threshold=perform_threshold)
             ###
@@ -882,10 +901,10 @@ class ccl_marker_stack(object):
             m1 = markers
 
         ### This is where you can put a filter to reduce the number of ccl-regions to analyze.
-        if discard_below_pixel_area is not None:
+        if minimum_pixel_area is not None:
             # print('')
-            # print('discard ',discard_below_pixel_area)
-            sw_timer.stamp('cms:make_slice_from:discard_below_pixel_area:start')
+            # print('discard ',minimum_pixel_area)
+            sw_timer.stamp('cms:make_slice_from:minimum_pixel_area:start')
             m1_flat = m1.flatten()
             m1_unique,m1u_indices,m1u_inverse,m1u_counts\
                 = np.unique(m1_flat
@@ -896,11 +915,11 @@ class ccl_marker_stack(object):
             # print('m1         ',np.amin(m1),np.amax(m1),m1.shape)
             # print('m1u        ',np.amin(m1_unique),np.amax(m1_unique),m1_unique.shape)
             # print('m1u counts ',np.amin(m1u_counts),np.amax(m1u_counts),m1u_counts.shape)
-            idx_zero = np.where( m1u_counts < discard_below_pixel_area)[0]
+            idx_zero = np.where( m1u_counts < minimum_pixel_area)[0]
             # print('idx_zero ',idx_zero)
             # print('idx_zero   ',np.amin(idx_zero),np.amax(idx_zero),len(idx_zero))
             m1_unique[idx_zero] = 0
-            idx_keep = np.where(m1u_counts >= discard_below_pixel_area)[0]
+            idx_keep = np.where(m1u_counts >= minimum_pixel_area)[0]
             # print('idx_keep   ',np.amin(idx_keep),np.amax(idx_keep),len(idx_keep))
             m1_unique[idx_keep] = np.arange(len(idx_keep))
             m1_flat = m1_unique[m1u_inverse]
@@ -908,17 +927,17 @@ class ccl_marker_stack(object):
             # print('m1 shape           ',m1.shape)
             # print('make_slice uniq    ',m1_unique.shape)
             # print('make_slice keeping ',len(idx_keep))
-            sw_timer.stamp('cms:make_slice_from:discard_below_pixel_area:end')
+            sw_timer.stamp('cms:make_slice_from:minimum_pixel_area:end')
 
-            # sw_timer.stamp('cms:make_slice_from:discard_below_pixel_area:start')
+            # sw_timer.stamp('cms:make_slice_from:minimum_pixel_area:start')
             # m1_flat         = m1.flatten()
             # m1_unique       = np.unique(m1_flat)
             # print('m1_unique.size: ',m1_unique.size)
             # m1_unique_count = np.zeros(m1_unique.shape,dtype=np.int64)
             # for i in range(m1_unique_count.size):
             #     m1_unique_count[i] = np.count_nonzero(m1_flat == m1_unique[i])
-            # idx_remove = np.where(m1_unique_count <  discard_below_pixel_area)
-            # idx_keep   = np.where(m1_unique_count >= discard_below_pixel_area)
+            # idx_remove = np.where(m1_unique_count <  minimum_pixel_area)
+            # idx_keep   = np.where(m1_unique_count >= minimum_pixel_area)
             # m_remove = m1_unique[idx_remove]
             # print('m_remove.size: ',m_remove.size)
             # for imr in m_remove:
@@ -928,7 +947,7 @@ class ccl_marker_stack(object):
             # for i in range(m_keep.size):
             #     if i != m_keep[i]:
             #         m1[np.where(m1 == m_keep[i])] = i
-            # sw_timer.stamp('cms:make_slice_from:discard_below_pixel_area:end')
+            # sw_timer.stamp('cms:make_slice_from:minimum_pixel_area:end')
 
         # If m1 has structures, then the min label # is 1. A label of 0 is no structure.
         # We need m1's labels to be distinct, so we need to add the max label of all the m0s.
